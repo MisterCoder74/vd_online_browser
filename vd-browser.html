@@ -150,6 +150,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .ai-out{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:11px;font-size:12px;color:var(--text2);line-height:1.75;min-height:100px;}
 .ai-out.idle{color:var(--text3);font-style:italic;}
 .ai-out.thinking{color:var(--amber);font-style:italic;}
+/* ── FIND BAR ── */
+.find-bar{display:none;align-items:center;gap:4px;padding:4px 10px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:20;flex-shrink:0;}
+.find-bar.visible{display:flex;}
+.find-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text1);border-radius:var(--r1);padding:3px 7px;font-size:12px;outline:none;font-family:var(--font-mono);}
+.find-input:focus{border-color:var(--accent);}
+.find-count{font-size:11px;color:var(--text3);white-space:nowrap;min-width:52px;text-align:center;}
+.find-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--r1);padding:2px 7px;cursor:pointer;font-size:11px;}
+.find-btn:hover{background:var(--bg4);color:var(--accent);}
 
 /* settings */
 .set-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
@@ -222,6 +230,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
       <div class="s-tab"        data-p="history"   onclick="switchPanel('history')"   title="History">&#128336;</div>
       <div class="s-tab"        data-p="reader"    onclick="switchPanel('reader')"    title="Reader Mode">&#128218;</div>
       <div class="s-tab"        data-p="settings"  onclick="switchPanel('settings')"  title="Settings">&#9881;</div>
+      <div class="s-tab"        data-p="sessions"  onclick="switchPanel('sessions')"  title="Sessions">&#128203;</div>
     </div>
 
     <!-- BOOKMARKS -->
@@ -254,6 +263,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
         <button class="act-btn" onclick="ai('reading')">&#9201; Estimate reading time</button>
         <button class="act-btn" onclick="ai('eli5')">&#129782; Explain like I'm 5</button>
         <button class="act-btn" onclick="ai('tweet')">&#128140; Draft a tweet about this</button>
+        <div class="sec-lbl" style="margin-top:12px;">Tab management</div>
+        <button class="act-btn" onclick="aiGroupTabs()">&#128193; Group my open tabs with AI</button>
         <div class="sec-lbl" style="margin-top:12px;">Ask about this page</div>
         <textarea class="mini-textarea" id="ai-q" rows="3" placeholder="What are the main arguments? Is this site trustworthy? …" style="min-height:70px;"></textarea>
         <button class="act-btn primary" onclick="ai('ask')" style="margin-top:5px;">&#9889; Ask AI</button>
@@ -341,11 +352,41 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
         </div>
       </div>
     </div>
+
+    <!-- SESSIONS -->
+    <div class="s-panel" id="panel-sessions">
+      <div class="p-head">&#128203; Sessions <span class="cnt" id="sess-cnt">0</span></div>
+      <div class="p-body">
+        <div class="sec-lbl">Save current tabs as session</div>
+        <div style="display:flex;gap:4px;">
+          <input class="mini-input" type="text" id="sess-name-in" placeholder="Session name…"
+                 style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')saveSession()">
+          <button class="act-btn primary" onclick="saveSession()"
+                  style="white-space:nowrap;width:auto;padding:6px 10px;margin-bottom:0;">&#128190; Save</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;">
+          Saves all <span id="sess-tab-count">0</span> open tab(s) under this name.
+        </div>
+        <div class="sec-lbl" style="margin-top:12px;">Saved sessions</div>
+        <div id="sess-list"></div>
+      </div>
+    </div>
   </div><!-- /sidebar -->
 
   <!-- ── BROWSER AREA ── -->
   <div class="browser-area">
     <div class="loadbar"><div class="loadbar-fill" id="loadbar"></div></div>
+
+    <!-- FIND BAR -->
+    <div class="find-bar" id="find-bar">
+      <span style="font-size:11px;color:var(--text3);">&#128269;</span>
+      <input id="find-input" class="find-input" type="text" placeholder="Find in page…"
+             oninput="findExec()" onkeydown="findKey(event)">
+      <span id="find-count" class="find-count"></span>
+      <button class="find-btn" onclick="findStep(-1)" title="Previous (Shift+Enter)">&#9650;</button>
+      <button class="find-btn" onclick="findStep(1)"  title="Next (Enter)">&#9660;</button>
+      <button class="find-btn" onclick="closeFindBar()" title="Close (Esc)">&#10005;</button>
+    </div>
 
     <!-- HOME PAGE -->
     <div class="home visible" id="home">
@@ -409,12 +450,12 @@ let notes = {};
 
 // ── BOOT ──────────────────────────────────────
 function boot() {
-  loadCfg(); loadBM(); loadHist(); loadNotes();
+  loadCfg(); loadBM(); loadHist(); loadNotes(); loadSessions();
   newTab();
   // Restore last active page (persists across navigation away and back)
   const lastUrl = localStorage.getItem('vdb-last-url');
   if (lastUrl && lastUrl !== 'about:home') loadUrl(lastUrl);
-  renderBM(); renderHist(); renderNotes();
+  renderBM(); renderHist(); renderNotes(); renderSessions();
   updateAiStatus(); updateProxyStatus();
   setInterval(() => { document.getElementById('sb-time').textContent = new Date().toLocaleTimeString(); }, 1000);
   document.addEventListener('keydown', globalKey);
@@ -531,7 +572,7 @@ function loadFrame(url) {
           html = `<base href="${origin}">` + html;
         }
         fr.removeAttribute('src');
-        fr.srcdoc = html;
+        fr.srcdoc = injectFindScript(html);
         lb.classList.remove('spin');
         const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
         const title = (titleMatch ? titleMatch[1].trim() : null) || domain(url);
@@ -942,9 +983,231 @@ function globalKey(e) {
   if (ctrl && e.key === 't')              { e.preventDefault(); newTab(); }
   if (ctrl && e.key === 'w')              { e.preventDefault(); if (activeId) closeTab(e, activeId); }
   if (ctrl && e.key === 'r' || e.key === 'F5') { e.preventDefault(); reloadPage(); }
+  if (ctrl && e.key === 'f')              { e.preventDefault(); toggleFindBar(); }
   if (e.key === 'F6')                     { e.preventDefault(); document.getElementById('url-input').focus(); }
   if (e.altKey && e.key === 'ArrowLeft')  { e.preventDefault(); goBack(); }
   if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); goForward(); }
+}
+
+// ── SESSIONS ──────────────────────────────────
+let sessions = {};
+
+function loadSessions() {
+  sessions = JSON.parse(localStorage.getItem('vdb-sessions') || '{}');
+}
+function _saveSessions() {
+  localStorage.setItem('vdb-sessions', JSON.stringify(sessions));
+}
+
+function saveSession() {
+  const name = document.getElementById('sess-name-in').value.trim();
+  if (!name) { toast('Enter a session name', 'err'); return; }
+  sessions[name] = {
+    saved: new Date().toISOString(),
+    tabs: tabs.map(t => ({ url: t.url, title: t.title, fav: t.fav }))
+  };
+  document.getElementById('sess-name-in').value = '';
+  _saveSessions();
+  renderSessions();
+  toast(`Session "${name}" saved — ${tabs.length} tab(s)`, 'ok');
+}
+
+function restoreSession(name) {
+  const s = sessions[name];
+  if (!s || !s.tabs?.length) return;
+  tabs = []; tabCtr = 0; activeId = null;
+  document.getElementById('tabbar').innerHTML = '';
+  s.tabs.forEach(t => newTab(t.url === 'about:home' ? undefined : t.url));
+  toast(`Session "${name}" restored`, 'ok');
+}
+
+function deleteSession(name) {
+  if (!confirm(`Delete session "${name}"?`)) return;
+  delete sessions[name];
+  _saveSessions();
+  renderSessions();
+  toast(`Session "${name}" deleted`, 'ok');
+}
+
+function renderSessions() {
+  const list = document.getElementById('sess-list');
+  const cnt  = document.getElementById('sess-cnt');
+  const hint = document.getElementById('sess-tab-count');
+  if (hint) hint.textContent = tabs.length;
+  if (!list) return;
+  const names = Object.keys(sessions);
+  if (cnt) cnt.textContent = names.length;
+  if (!names.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:11px;text-align:center;padding:20px 0;">No saved sessions yet</div>';
+    return;
+  }
+  list.innerHTML = names.map(name => {
+    const s = sessions[name];
+    const date = new Date(s.saved).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+    const preview = (s.tabs || []).map(t => t.title || t.url).slice(0, 4).join(', ') + (s.tabs.length > 4 ? '…' : '');
+    return `<div class="bm-item" style="flex-direction:column;gap:4px;align-items:stretch;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:13px;">&#128203;</span>
+        <span style="font-weight:600;flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
+        <button class="bm-del" onclick="restoreSession('${esc(name).replace(/'/g,"\\'")}');" title="Restore session"
+                style="color:var(--accent);padding:2px 7px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--r1);">↩</button>
+        <button class="bm-del" onclick="deleteSession('${esc(name).replace(/'/g,"\\'")}');" title="Delete">&#10005;</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);">${s.tabs.length} tab${s.tabs.length!==1?'s':''} · ${date}</div>
+      <div style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(preview)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SMART TAB GROUPER ─────────────────────────
+async function aiGroupTabs() {
+  const key = cfg.key;
+  if (!key) { toast('Set your OpenAI API key in Settings', 'err'); switchPanel('settings'); return; }
+  if (tabs.length < 2) { toast('Open at least 2 tabs to group', 'err'); return; }
+  switchPanel('ai');
+  const out = document.getElementById('ai-out');
+  out.className = 'ai-out thinking';
+  out.textContent = '⏳ Grouping your tabs…';
+  const tabList = tabs.map((t, i) => `${i+1}. ${t.title} — ${t.url}`).join('\n');
+  const prompt = `You are a browser tab organizer. Group the following open tabs into 2–5 meaningful categories. Assign each tab to exactly one group.\n\nTabs:\n${tabList}\n\nReturn ONLY a JSON object, no markdown:\n{"groups":[{"name":"Group Name","emoji":"🔧","tabs":[1,3]},…]}`;
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 512 })
+    });
+    if (!r.ok) throw new Error('API error ' + r.status);
+    const data = await r.json();
+    let raw = data.choices?.[0]?.message?.content || '{}';
+    raw = raw.replace(/```json|```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch(e) { throw new Error('AI returned invalid JSON'); }
+    const groups = parsed.groups || [];
+    if (!groups.length) throw new Error('No groups returned');
+    let html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text3);">AI tab groups — click to switch:</div>';
+    groups.forEach(g => {
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:5px;display:flex;align-items:center;gap:5px;">
+          <span>${esc(g.emoji || '📁')}</span><span>${esc(g.name)}</span>
+        </div>`;
+      (g.tabs || []).forEach(idx => {
+        const t = tabs[idx - 1];
+        if (!t) return;
+        html += `<div onclick="activateTab(${t.id})"
+          style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:var(--r1);background:var(--bg3);margin-bottom:3px;font-size:11px;border:1px solid transparent;"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'">
+          <span>${esc(t.fav)}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.title)}</span>
+        </div>`;
+      });
+      html += '</div>';
+    });
+    out.className = 'ai-out';
+    out.innerHTML = html;
+  } catch(e) {
+    out.className = 'ai-out';
+    out.textContent = '⚠ Error: ' + e.message;
+    toast('Tab grouper error: ' + e.message, 'err');
+  }
+}
+
+// ── FIND IN PAGE ──────────────────────────────
+function toggleFindBar() {
+  const bar = document.getElementById('find-bar');
+  const visible = bar.classList.toggle('visible');
+  if (visible) {
+    document.getElementById('find-input').focus();
+    document.getElementById('find-input').select();
+  } else {
+    document.getElementById('find-count').textContent = '';
+    clearFindInFrame();
+  }
+}
+
+function closeFindBar() {
+  document.getElementById('find-bar').classList.remove('visible');
+  document.getElementById('find-input').value = '';
+  document.getElementById('find-count').textContent = '';
+  clearFindInFrame();
+}
+
+function findKey(e) {
+  if (e.key === 'Escape')  { closeFindBar(); return; }
+  if (e.key === 'Enter')   { findStep(e.shiftKey ? -1 : 1); }
+}
+
+function findExec() {
+  const q = document.getElementById('find-input').value;
+  if (!q) { document.getElementById('find-count').textContent = ''; clearFindInFrame(); return; }
+  document.getElementById('main-frame').contentWindow?.postMessage({ type: 'vdbFind', query: q, step: 0 }, '*');
+}
+
+function findStep(dir) {
+  const q = document.getElementById('find-input').value;
+  if (!q) return;
+  document.getElementById('main-frame').contentWindow?.postMessage({ type: 'vdbFind', query: q, step: dir }, '*');
+}
+
+function clearFindInFrame() {
+  document.getElementById('main-frame').contentWindow?.postMessage({ type: 'vdbFindClear' }, '*');
+}
+
+// Listen for find results posted from inside the iframe
+window.addEventListener('message', e => {
+  if (e.data?.type === 'vdbFindResult') {
+    const { count, current } = e.data;
+    document.getElementById('find-count').textContent = count > 0 ? `${current}/${count}` : (count === 0 ? 'No results' : '');
+  }
+});
+
+// Inject the find-in-page engine into srcdoc HTML before writing it
+function injectFindScript(html) {
+  const script = `<script>(function(){
+  let marks=[],idx=0;
+  const HL='background:#ffdd44;color:#000;border-radius:2px;padding:0 1px;';
+  const AC='background:#ff8800;color:#000;border-radius:2px;padding:0 1px;';
+  function clearMarks(){
+    marks.forEach(m=>{const p=m.parentNode;if(p){p.replaceChild(document.createTextNode(m.textContent),m);p.normalize();}});
+    marks=[];idx=0;
+  }
+  function markAll(q){
+    clearMarks();
+    if(!q)return;
+    const re=new RegExp(q.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\// ── UTILS ─────────────────────────────────────'),'gi');
+    const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];let n;while(n=walk.nextNode())nodes.push(n);
+    nodes.forEach(node=>{
+      if(['SCRIPT','STYLE','NOSCRIPT','TEXTAREA'].includes(node.parentNode?.tagName))return;
+      const txt=node.textContent;if(!re.test(txt))return;re.lastIndex=0;
+      const frag=document.createDocumentFragment();let last=0,m;
+      while(m=re.exec(txt)){
+        if(m.index>last)frag.appendChild(document.createTextNode(txt.slice(last,m.index)));
+        const span=document.createElement('mark');span.textContent=m[0];
+        span.setAttribute('data-vdbf','1');span.style.cssText=HL;
+        frag.appendChild(span);marks.push(span);last=m.index+m[0].length;
+      }
+      if(last<txt.length)frag.appendChild(document.createTextNode(txt.slice(last)));
+      node.parentNode.replaceChild(frag,node);
+    });
+    if(marks.length){marks[0].style.cssText=AC;marks[0].scrollIntoView({block:'center',behavior:'smooth'});}
+    window.parent.postMessage({type:'vdbFindResult',count:marks.length,current:marks.length?1:0},'*');
+  }
+  window.addEventListener('message',e=>{
+    if(e.data?.type==='vdbFind'){
+      const{query,step}=e.data;
+      if(!marks.length||step===0){markAll(query);return;}
+      if(marks.length){
+        marks[idx].style.cssText=HL;
+        idx=(idx+step+marks.length)%marks.length;
+        marks[idx].style.cssText=AC;
+        marks[idx].scrollIntoView({block:'center',behavior:'smooth'});
+        window.parent.postMessage({type:'vdbFindResult',count:marks.length,current:idx+1},'*');
+      }
+    }else if(e.data?.type==='vdbFindClear'){clearMarks();}
+  });
+}());<\/script>`;
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, script + '</body>');
+  return html + script;
 }
 
 // ── UTILS ─────────────────────────────────────
