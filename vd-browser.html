@@ -1389,16 +1389,16 @@ function splitLoadFrame(url) {
   lb.style.width = '0'; lb.className = 'loadbar-fill spin';
   sec.textContent = url.startsWith('https') ? '🔒' : '⚠️';
 
-  const fetchUrl = buildFetchUrl(url);
-  if (!fetchUrl) {
+  const { fetchUrl, mode: fMode } = buildFetchUrl(url);
+  if (!fetchUrl || fMode === 'direct') {
     sf.removeAttribute('srcdoc'); sf.src = url; sf.style.display = '';
     lb.className = 'loadbar-fill'; lb.style.width = '100%';
     splitPushHistory(url); return;
   }
   fetch(fetchUrl)
-    .then(r => { if (!r.ok) throw new Error(r.status); return cfg.proxy === 'allorigins' ? r.json() : r.text(); })
+    .then(r => { if (!r.ok) throw new Error(r.status); return fMode === 'allorigins-json' ? r.json() : r.text(); })
     .then(data => {
-      let htm = cfg.proxy === 'allorigins' ? (data.contents || '') : data;
+      let htm = fMode === 'allorigins-json' ? (data.contents || '') : data;
       if (!htm) throw new Error('Empty response');
       const origin = (() => { try { const u = new URL(url); return u.origin + u.pathname.replace(/[^/]*$/, ''); } catch(e) { return url; } })();
       if (/<head[\s>]/i.test(htm)) { htm = htm.replace(/(<head[^>]*>)/i, `$1<base href="${origin}">`); }
@@ -1527,11 +1527,11 @@ async function rebuildPage() {
   out.textContent = '⏳ Fetching page & rebuilding with AI…';
 
   try {
-    const fetchUrl = buildFetchUrl(url);
-    if (!fetchUrl) throw new Error('Enable a proxy in Settings first (proxy.php recommended)');
+    const { fetchUrl, mode: rMode } = buildFetchUrl(url);
+    if (!fetchUrl || rMode === 'direct') throw new Error('Enable a proxy in Settings first (proxy.php recommended)');
     const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error('Proxy error ' + res.status);
-    const rawHtml = cfg.proxy === 'allorigins' ? ((await res.json()).contents || '') : await res.text();
+    const rawHtml = rMode === 'allorigins-json' ? ((await res.json()).contents || '') : await res.text();
     if (!rawHtml) throw new Error('Empty page response');
 
     const gptPrompt = `You are a web page editor. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML with no markdown fences, no explanations.\n\nChanges: ${prompt}\n\nOriginal HTML (first 9000 chars):\n${rawHtml.slice(0, 9000)}`;
