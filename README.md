@@ -1,6 +1,6 @@
 # VD Online Browser
 
-A **browser-in-browser** web application — a single PHP+HTML project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, and much more.
+A **browser-in-browser** web application — a single PHP+HTML project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, sessions, find in page, split view, PiP, edit mode, and more.
 
 Built with a dark-themed design system (Fraunces + DM Mono, CSS custom properties), no external JS frameworks.
 
@@ -41,15 +41,43 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 - Last active page auto-restored on reload (persists via `localStorage`)
 
 ### 🔀 Proxy & Page Loading
-- **Local PHP proxy** (`proxy.php`, recommended): server-side cURL fetch, no CORS errors, no QUIC issues, no rate limits
+- **Local PHP proxy** (`proxy.php`, recommended): server-side cURL fetch, no CORS errors, no QUIC issues
 - **AllOrigins fallback**: public CORS proxy for environments without PHP
 - **Custom proxy**: any proxy URL configurable in Settings
 - **Direct mode**: no proxy (most modern sites will block embedding)
-- Pages loaded via `fetch()` + `iframe.srcdoc` injection — no direct iframe `src` assignment
-- `<base href>` injected automatically so relative asset URLs resolve correctly
+- Pages loaded via `fetch()` + `iframe.srcdoc` injection with auto-injected `<base href>` for relative URLs
+
+### 🪟 Side-by-Side Split Mode _(Fase 2)_
+- `Ctrl+\` or toolbar button to enter/exit split mode
+- Two independent browsing panes side by side
+- Right pane has its own URL bar, Back/Forward/Reload, and load history
+- "Send to main pane" button (←■) transfers the URL to the left pane
+- Each pane loads pages through the configured proxy
+- Close button exits split mode and clears the right pane
+
+### 📌 Picture-in-Picture (PiP) _(Fase 2)_
+- Toolbar button opens the current page in a floating mini-window (340×230px)
+- Draggable by header — reposition anywhere on screen
+- Resizable via `resize: both`
+- "Send to main pane" button to pop back as the active tab
+- Close button dismisses the PiP window
+
+### ✏️ Edit Mode _(Fase 2)_
+- `Ctrl+E` or toolbar button to toggle edit mode on the current page
+- **contentEditable** injected via postMessage into the iframe
+- **Toolbar** with: Bold, Italic, Underline, H1, H2, Paragraph, Insert Link, Clear Formatting
+- **Save HTML** downloads the modified page as an `.html` file
+- Visual indicator: dashed yellow outline on the body in edit mode
+
+### 🏗️ Page Rebuilder (AI) _(Fase 2)_
+- Text field in AI panel: describe the changes you want ("dark mode, remove ads, bigger font")
+- Fetches current page HTML via proxy, sends to GPT-4o-mini with instructions
+- Returns complete rebuilt HTML (up to 4096 tokens output)
+- **Download** button saves the rebuilt page as `.html`
+- **Preview** button opens the rebuilt page in a new tab directly in the browser
 
 ### 🤖 AI Assistant (GPT-4o-mini, requires OpenAI API key)
-All AI actions fetch **real page content** via `proxy.php` before sending to GPT — no guessing from URL/title.
+All AI actions fetch **real page content** via `proxy.php` before sending to GPT.
 
 | Action | Description |
 |--------|-------------|
@@ -64,6 +92,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 | Ask about this page | Free-form Q&A with page context |
 | Generate reader view | Clean article markdown in Reader Mode panel |
 | **Group tabs with AI** _(Fase 1)_ | Clusters all open tabs into labeled groups |
+| **Page rebuilder** _(Fase 2)_ | Generates modified HTML based on description |
 
 ### 📋 Sessions _(Fase 1)_
 - Save the current set of open tabs as a named session
@@ -98,7 +127,6 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 ### 📖 Reader Mode
 - AI-generated clean article view for the active page
 - Font size slider (12–22px)
-- Rendered directly in the sidebar
 
 ### ⚙️ Settings
 - OpenAI API key (password field, persisted)
@@ -118,6 +146,8 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 | `Ctrl+L` / `F6` | Focus URL bar |
 | `Ctrl+R` / `F5` | Reload page |
 | `Ctrl+F` | Find in page |
+| `Ctrl+E` | Toggle edit mode |
+| `Ctrl+\` | Toggle split mode |
 | `Alt+←` | Back |
 | `Alt+→` | Forward |
 
@@ -130,16 +160,16 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] Smart tab grouper (AI clusters open tabs)
 - [x] Find in page (Ctrl+F, real iframe highlighting)
 
-### 🔄 Fase 2 — In progress
-- [ ] Side-by-side mode (split two iframes)
-- [ ] PiP tab (floating detachable mini-window)
-- [ ] Edit mode (contentEditable injection + save/download)
-- [ ] Page rebuilder (AI generates HTML variant from description)
+### ✅ Fase 2 — Complete
+- [x] Side-by-side split mode (dual iframe layout, independent navigation)
+- [x] PiP tab (floating draggable mini-window, resizable)
+- [x] Edit mode (contentEditable + formatting toolbar + save HTML)
+- [x] Page rebuilder (AI generates HTML variant from description)
 
 ### 📋 Fase 3 — Planned
 - [ ] Screenshot + annotate (html2canvas injection + draw tools)
 - [ ] AI form filler (detect forms, GPT autofill via postMessage)
-- [ ] Password manager panel (per-domain credentials, AES-256, autofill)
+- [ ] Password manager panel (per-domain credentials, autofill)
 - [ ] Page & asset download as ZIP (JSZip + proxy multi-fetch)
 
 ### 🔐 Fase 4 — Last
@@ -152,6 +182,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - **JS-heavy SPAs** (React/Next.js apps): HTML loads but external API calls remain cross-origin and may break functionality
 - **Major platforms** (Google, YouTube, Twitter/X, Facebook): actively block proxies server-side — use "Open in new tab" fallback
 - **Direct mode** (no proxy): virtually all modern sites block iframe embedding via `X-Frame-Options` / `Content-Security-Policy`
+- **Edit mode**: `document.execCommand` is deprecated but still functional in all current browsers; works best on proxy-loaded pages
 
 ---
 
