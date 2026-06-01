@@ -790,8 +790,16 @@ function renderBM() {
         <div class="bm-item-title">${esc(b.title)}</div>
         <div class="bm-item-url">${esc(domain(b.url))}</div>
       </div>
+      <button class="bm-del" onclick="event.stopPropagation();openInSplit('${esc(b.url)}')" title="Open in split pane" style="font-size:11px;opacity:.7;">&#9707;</button>
       <button class="bm-del" onclick="event.stopPropagation();delBM(${b.id})" title="Remove">✕</button>
     </div>`).join('');
+}
+
+function openInSplit(url) {
+  const wrap = document.getElementById('split-wrap');
+  if (!wrap.classList.contains('split')) toggleSplit();
+  splitLoadFrame(url);
+  document.getElementById('split-url-in').value = url;
 }
 
 function quickBookmark() {
