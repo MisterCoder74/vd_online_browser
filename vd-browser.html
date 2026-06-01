@@ -150,6 +150,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .act-btn.primary{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
 .act-btn.primary:hover{background:var(--accent);color:var(--bg);}
 .sec-lbl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin:10px 0 5px;}
+.tg-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:9px 10px;margin-bottom:6px;}
+.tg-group-hd{font-weight:700;font-size:12px;display:flex;align-items:center;gap:5px;margin-bottom:4px;color:var(--text);}
+.tg-tab{cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:var(--r1);background:var(--bg2);margin-bottom:3px;font-size:11px;border:1px solid transparent;color:var(--text2);}
+.tg-tab:hover{border-color:var(--accent);color:var(--text);}
+.tg-meta{font-size:10px;color:var(--text3);margin-bottom:6px;}
+.tg-actions{display:flex;gap:5px;margin-bottom:7px;}
+.tg-btn{font-size:10px;padding:2px 8px;border-radius:var(--r1);border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;}
+.tg-btn:hover{background:var(--bg4,var(--bg3));border-color:var(--accent);color:var(--text);}
 .mini-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 9px;outline:none;margin-bottom:5px;}
 .mini-input:focus{border-color:var(--accent);}
 .mini-textarea{width:100%;min-height:160px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:9px;outline:none;resize:vertical;line-height:1.6;}
@@ -297,6 +305,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
         <button class="act-btn" onclick="ai('tweet')">&#128140; Draft a tweet about this</button>
         <div class="sec-lbl" style="margin-top:12px;">Tab management</div>
         <button class="act-btn" onclick="aiGroupTabs()">&#128193; Group my open tabs with AI</button>
+        <!-- PERSISTENT TAB GROUPS -->
+        <div id="tab-groups-box" style="display:none;margin-top:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);">Saved groups</span>
+            <div class="tg-actions" style="margin-bottom:0;">
+              <button class="tg-btn" onclick="aiGroupTabs()" title="Re-run AI grouping">&#8635; Re-group</button>
+              <button class="tg-btn" onclick="clearTabGroups()" title="Remove saved groups">&#10005; Clear</button>
+            </div>
+          </div>
+          <div class="tg-meta" id="tg-meta"></div>
+          <div id="tg-list"></div>
+        </div>
         <div class="sec-lbl" style="margin-top:12px;">Page rebuilder (AI)</div>
         <textarea class="mini-input" id="rebuild-prompt" rows="2"
                   style="resize:vertical;min-height:55px;" placeholder="Describe changes… e.g. 'dark mode, remove ads, bigger font'"></textarea>
@@ -543,7 +563,7 @@ function boot() {
   // Restore last active page (persists across navigation away and back)
   const lastUrl = localStorage.getItem('vdb-last-url');
   if (lastUrl && lastUrl !== 'about:home') loadUrl(lastUrl);
-  renderBM(); renderHist(); renderNotes(); renderSessions();
+  renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups();
   updateAiStatus(); updateProxyStatus();
   setInterval(() => { document.getElementById('sb-time').textContent = new Date().toLocaleTimeString(); }, 1000);
   document.addEventListener('keydown', globalKey);
@@ -1182,31 +1202,53 @@ async function aiGroupTabs() {
     try { parsed = JSON.parse(raw); } catch(e) { throw new Error('AI returned invalid JSON'); }
     const groups = parsed.groups || [];
     if (!groups.length) throw new Error('No groups returned');
-    let html = '<div style="margin-bottom:8px;font-size:11px;color:var(--text3);">AI tab groups — click to switch:</div>';
-    groups.forEach(g => {
-      html += `<div style="margin-bottom:12px;">
-        <div style="font-weight:700;font-size:12px;margin-bottom:5px;display:flex;align-items:center;gap:5px;">
-          <span>${esc(g.emoji || '📁')}</span><span>${esc(g.name)}</span>
-        </div>`;
-      (g.tabs || []).forEach(idx => {
+
+    // Build snapshot (title+url+fav) so groups persist even if tabs close
+    const snapshot = groups.map(g => ({
+      name: g.name, emoji: g.emoji || '📁',
+      tabs: (g.tabs || []).map(idx => {
         const t = tabs[idx - 1];
-        if (!t) return;
-        html += `<div onclick="activateTab(${t.id})"
-          style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:var(--r1);background:var(--bg3);margin-bottom:3px;font-size:11px;border:1px solid transparent;"
-          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'">
-          <span>${esc(t.fav)}</span>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.title)}</span>
-        </div>`;
-      });
-      html += '</div>';
-    });
+        return t ? { title: t.title, url: t.url, fav: t.fav } : null;
+      }).filter(Boolean)
+    }));
+    localStorage.setItem('vdb-tab-groups', JSON.stringify({ savedAt: new Date().toISOString(), groups: snapshot }));
+    renderTabGroups();
+
     out.className = 'ai-out';
-    out.innerHTML = html;
+    out.textContent = `✅ ${snapshot.length} groups saved — see "Saved groups" above.`;
   } catch(e) {
     out.className = 'ai-out';
     out.textContent = '⚠ Error: ' + e.message;
     toast('Tab grouper error: ' + e.message, 'err');
   }
+}
+
+function renderTabGroups() {
+  const raw = localStorage.getItem('vdb-tab-groups');
+  const box  = document.getElementById('tab-groups-box');
+  const list = document.getElementById('tg-list');
+  const meta = document.getElementById('tg-meta');
+  if (!raw) { box.style.display = 'none'; return; }
+  const { savedAt, groups } = JSON.parse(raw);
+  if (!groups || !groups.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  const d = new Date(savedAt);
+  meta.textContent = `${groups.length} groups · ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  list.innerHTML = groups.map(g => `
+    <div class="tg-box">
+      <div class="tg-group-hd"><span>${esc(g.emoji)}</span><span>${esc(g.name)}</span></div>
+      ${g.tabs.map(t => `
+        <div class="tg-tab" onclick="loadUrl('${esc(t.url)}')" title="${esc(t.url)}">
+          <span>${esc(t.fav || '🌐')}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.title)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+function clearTabGroups() {
+  localStorage.removeItem('vdb-tab-groups');
+  renderTabGroups();
+  toast('Tab groups cleared', 'ok');
 }
 
 // ── FIND IN PAGE ──────────────────────────────
