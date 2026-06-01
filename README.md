@@ -91,7 +91,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 | Draft a tweet | 280-char tweet about the page |
 | Ask about this page | Free-form Q&A with page context |
 | Generate reader view | Clean article markdown in Reader Mode panel |
-| **Group tabs with AI** _(Fase 1)_ | Clusters all open tabs into labeled groups |
+| **Group tabs with AI** _(Fase 1)_ | Clusters all open tabs into labeled groups; groups saved as snapshots in `localStorage`, persistent across panel switches and page reloads |
 | **Page rebuilder** _(Fase 2)_ | Generates modified HTML based on description |
 
 ### 📋 Sessions _(Fase 1)_
@@ -137,6 +137,11 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - Export all data (JSON)
 - Clear all data
 
+### 🪟 Bookmark → Split Pane
+- Each bookmark has a second button (⎗) to open it directly in the right split pane
+- Auto-activates split mode if not already open
+- Main pane click behavior unchanged
+
 ### ⌨️ Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
@@ -157,14 +162,16 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 
 ### ✅ Fase 1 — Complete
 - [x] Session manager (save/restore named tab sets)
-- [x] Smart tab grouper (AI clusters open tabs)
+- [x] Smart tab grouper (AI clusters open tabs; saved as localStorage snapshots, persistent)
 - [x] Find in page (Ctrl+F, real iframe highlighting)
 
 ### ✅ Fase 2 — Complete
 - [x] Side-by-side split mode (dual iframe layout, independent navigation)
+- [x] Bookmark → split pane (⎗ button per bookmark, auto-opens split if needed)
 - [x] PiP tab (floating draggable mini-window, resizable)
 - [x] Edit mode (contentEditable + formatting toolbar + save HTML)
 - [x] Page rebuilder (AI generates HTML variant from description)
+- [x] Bug fix: `buildFetchUrl()` destructuring in `splitLoadFrame` and `rebuildPage` (was sending `[object Object]` as fetch URL)
 
 ### 📋 Fase 3 — Planned
 - [ ] Screenshot + annotate (html2canvas injection + draw tools)
@@ -174,6 +181,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 
 ### 🔐 Fase 4 — Last
 - [ ] User registration & login system (PHP + bcrypt)
+- [ ] Migrate all `localStorage` data to per-user JSON files on the server (`users/{id}/bookmarks.json`, `history.json`, `notes.json`, `settings.json`, `sessions.json`, `tab-groups.json`); `localStorage` kept as offline/guest fallback
 
 ---
 
