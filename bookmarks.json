@@ -1,0 +1,56 @@
+[
+    {
+        "title": "Codepen",
+        "url": "https://codepen.io/your-work",
+        "notes": "Fabulous coding tool",
+        "tags": [
+            "general"
+        ],
+        "created": "2026-03-22T09:37:08+00:00"
+    },
+    {
+        "title": "Vivacity GPT Complete",
+        "url": "https://www.vivacitydesign.net/vdgptscomplete/",
+        "notes": "Suite of AI Tools",
+        "tags": [
+            "ai"
+        ],
+        "created": "2026-03-22T09:37:45+00:00"
+    },
+    {
+        "title": "Vivacity Design",
+        "url": "https://www.vivacitydesign.net/",
+        "notes": "Web Agency Homepage",
+        "tags": [
+            "general"
+        ],
+        "created": "2026-03-22T09:38:15+00:00"
+    },
+    {
+        "id": "1774173823277",
+        "title": "Quora Page",
+        "url": "https://it.quora.com/",
+        "notes": "Q/A social network powered by AI",
+        "tags": [
+            "qanda",
+            "socialnetwork",
+            "ai",
+            "community",
+            "knowledge"
+        ],
+        "aiTagged": true,
+        "createdAt": "2026-03-22T10:03:43.277Z"
+    },
+    {
+        "id": "1779618196216",
+        "title": "Vivacity Design AI Division Homepage",
+        "url": "https://www.vivacitydesign.net/vd_ai_division/",
+        "notes": "Homepage of the AI Division of Vivacity Design, by Alessandro Demontis",
+        "tags": [
+            "design",
+            "ai"
+        ],
+        "aiTagged": false,
+        "createdAt": "2026-05-24T10:23:16.216Z"
+    }
+]

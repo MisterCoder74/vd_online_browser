@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookmark OS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1c1e18;
+  --bg2: #252720;
+  --bg3: #2f3228;
+  --border: #424638;
+  --border2: #585d4c;
+  --text: #f0ede0;
+  --text2: #c0bead;
+  --text3: #8a8878;
+  --accent: #c8f060;
+  --accent2: #a8cc40;
+  --accent-dim: #2a3810;
+  --red: #f07878;
+  --red-dim: #38181a;
+  --blue: #80baf5;
+  --blue-dim: #142438;
+  --amber: #f5c870;
+  --amber-dim: #382a10;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'DM Mono', 'Courier New', monospace;
+  --r: 6px;
+  --r2: 10px;
+}
+
+body {
+  font-family: var(--font-mono);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* GRID LAYOUT */
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 56px 1fr;
+  min-height: 100vh;
+}
+
+/* TOPBAR */
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+.topbar-logo {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-logo span { color: var(--text2); font-size: 12px; font-family: var(--font-mono); }
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+.btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent2); color: var(--accent); }
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 500;
+}
+.btn-primary:hover { background: #d4f570; color: var(--bg); border-color: #d4f570; }
+.btn-danger { color: var(--red); border-color: var(--red-dim); }
+.btn-danger:hover { background: var(--red-dim); border-color: var(--red); }
+
+/* SIDEBAR */
+.sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  overflow-y: auto;
+}
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+  padding: 0 18px;
+  margin-bottom: 6px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: background 0.1s;
+  color: var(--text2);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.sidebar-item:hover { background: var(--bg3); color: var(--text); }
+.sidebar-item.active { background: var(--accent-dim); color: var(--accent); }
+.sidebar-item .icon { width: 16px; text-align: center; font-size: 14px; }
+.sidebar-count {
+  margin-left: auto;
+  font-size: 10px;
+  background: var(--bg3);
+  color: var(--text3);
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+.sidebar-item.active .sidebar-count { background: var(--accent-dim); color: var(--accent2); }
+
+/* MAIN CONTENT */
+.main {
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+/* PANELS */
+.panel { display: none; padding: 28px 32px; }
+.panel.active { display: block; }
+
+/* PANEL HEADER */
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.2;
+}
+.panel-title em { color: var(--accent); font-style: italic; }
+
+/* SEARCH BAR */
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.search-input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input::placeholder { color: var(--text3); }
+.search-input:focus { border-color: var(--accent2); }
+
+/* STATS ROW */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 14px 16px;
+}
+.stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-family: var(--font-display); font-weight: 300; color: var(--accent); }
+
+/* BOOKMARK GRID */
+.bookmark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.bookmark-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 16px;
+  transition: border-color 0.2s, transform 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.bookmark-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s;
+}
+.bookmark-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.bookmark-card:hover::before { transform: scaleX(1); }
+.bm-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.bm-url {
+  font-size: 11px;
+  color: var(--blue);
+  text-decoration: none;
+  display: block;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bm-url:hover { color: var(--accent); }
+.bm-notes {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 10px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bm-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.bm-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--accent-dim);
+  color: var(--accent2);
+  border: 1px solid #2d4010;
+}
+.bm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.bm-date { font-size: 10px; color: var(--text3); }
+.bm-actions { display: flex; gap: 6px; }
+.bm-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 0.15s;
+}
+.bm-btn:hover { border-color: var(--red); color: var(--red); }
+.bm-btn.ai-tag-btn:hover { border-color: var(--accent2); color: var(--accent); }
+
+/* AI BADGE */
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--blue-dim);
+  color: var(--blue);
+  border: 1px solid #0d2a44;
+}
+
+/* EMPTY STATE */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+}
+.empty-state .big { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 13px; line-height: 1.7; }
+
+/* ADD FORM */
+.add-form {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 24px;
+  max-width: 640px;
+}
+.form-row { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.form-input, .form-textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input::placeholder, .form-textarea::placeholder { color: var(--text3); }
+.form-input:focus, .form-textarea:focus { border-color: var(--accent2); }
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-actions { display: flex; gap: 10px; align-items: center; }
+.ai-status {
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-status.loading { color: var(--amber); }
+.ai-status.ok { color: var(--accent2); }
+.ai-status.err { color: var(--red); }
+
+/* TAG CLOUD */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 20px 0;
+}
+.cloud-tag {
+  cursor: pointer;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: 4px 14px;
+  transition: all 0.15s;
+  color: var(--text2);
+  background: var(--bg2);
+  font-family: var(--font-mono);
+}
+.cloud-tag:hover { border-color: var(--accent2); color: var(--accent); background: var(--accent-dim); }
+.cloud-tag.active { background: var(--accent-dim); border-color: var(--accent2); color: var(--accent); }
+
+/* SETUP PANEL */
+.setup-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 28px;
+  max-width: 520px;
+}
+.setup-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 300;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.setup-card p { font-size: 12px; color: var(--text2); margin-bottom: 20px; line-height: 1.7; }
+.setup-warning {
+  background: var(--amber-dim);
+  border: 1px solid #3d2e0a;
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--amber);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.key-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  color: var(--accent2);
+  word-break: break-all;
+  margin-top: 12px;
+}
+.status-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.status-dot.green { background: var(--accent); }
+.status-dot.red { background: var(--red); }
+.status-dot.gray { background: var(--text3); }
+
+/* SPINNER */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+/* TOAST */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text);
+  animation: slideIn 0.2s ease;
+  max-width: 300px;
+}
+.toast.success { border-left: 3px solid var(--accent); }
+.toast.error { border-left: 3px solid var(--red); }
+.toast.info { border-left: 3px solid var(--blue); }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* DIVIDER */
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+/* NO API NOTICE */
+.no-api-notice {
+  background: var(--amber-dim);
+  border: 1px solid #3d2e0a;
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--amber);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.no-api-notice a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* FILTER BAR */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.filter-label { font-size: 11px; color: var(--text3); margin-right: 4px; }
+
+/* MODAL OVERLAY */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  padding: 28px;
+  width: 480px;
+  max-width: 90vw;
+}
+.modal h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 300;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .stats-row { grid-template-columns: repeat(2,1fr); }
+  .bookmark-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      Bookmark <em style="font-style:italic;">OS</em>
+      <span>v2.0</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" onclick="window.location.assign('vd-browser.html')">&lt;- Back to browser</button>      
+      <button class="btn" onclick="showPanel('add')">+ Add bookmark</button>
+      <button class="btn" onclick="showPanel('setup')">⚙ Setup</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Views</div>
+      <button class="sidebar-item active" onclick="showPanel('library')" id="nav-library">
+        <span class="icon">▦</span> All bookmarks
+        <span class="sidebar-count" id="count-all">0</span>
+      </button>
+      <button class="sidebar-item" onclick="showPanel('tags')" id="nav-tags">
+        <span class="icon">#</span> Tag cloud
+      </button>
+      <button class="sidebar-item" onclick="showPanel('add')" id="nav-add">
+        <span class="icon">+</span> Add new
+      </button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Quick filters</div>
+      <div id="sidebar-tags"></div>
+    </div>
+    <div class="sidebar-section" style="margin-top: auto; padding-top: 20px;">
+      <div class="sidebar-label">System</div>
+      <button class="sidebar-item" onclick="showPanel('setup')" id="nav-setup">
+        <span class="icon">⚙</span> API Setup
+        <span class="sidebar-count" id="api-indicator">—</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- LIBRARY PANEL -->
+    <div class="panel active" id="panel-library">
+      <div class="panel-header">
+        <h1 class="panel-title">Your <em>library</em></h1>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AI-tagged</div>
+          <div class="stat-value" id="stat-ai">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unique tags</div>
+          <div class="stat-value" id="stat-tags">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">This week</div>
+          <div class="stat-value" id="stat-week">0</div>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input type="search" class="search-input" id="dummy-main-search" placeholder="Search title, notes, tags…" style="display: none;" autofocus>      
+        <input type="search" class="search-input" id="main-search" placeholder="Search title, notes, tags…" oninput="filterBookmarks()">
+        <button class="btn" onclick="clearSearch()">Clear</button>
+      </div>
+      <div class="filter-bar" id="active-filter-bar" style="display:none;">
+        <span class="filter-label">Filtering by tag:</span>
+        <span id="active-filter-tag" class="bm-tag" style="font-size:12px; cursor:pointer;" onclick="clearTagFilter()"></span>
+        <button class="btn" onclick="clearTagFilter()" style="padding:3px 8px; font-size:11px;">× clear</button>
+      </div>
+      <div class="bookmark-grid" id="bookmark-grid">
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="big">◈</div>
+          <p>No bookmarks yet.<br>Add your first one using the button above.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD PANEL -->
+    <div class="panel" id="panel-add">
+      <div class="panel-header">
+        <h1 class="panel-title">Add <em>bookmark</em></h1>
+      </div>
+      <div id="no-api-add" class="no-api-notice" style="display:none;">
+        ⚠ No OpenAI API key set. Tags will be generated with basic keyword matching.
+        <a onclick="showPanel('setup')">Configure →</a>
+      </div>
+      <div class="add-form">
+        <div class="form-row">
+          <label class="form-label">Title *</label>
+          <input class="form-input" id="f-title" placeholder="Article, tool, or page name…">
+        </div>
+        <div class="form-row">
+          <label class="form-label">URL *</label>
+          <input class="form-input" id="f-url" placeholder="https://…" type="url">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Notes / Description</label>
+          <textarea class="form-textarea" id="f-notes" placeholder="What is this about? Why did you save it?"></textarea>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Manual tags (optional, comma separated)</label>
+          <input class="form-input" id="f-tags" placeholder="e.g. design, tools, inspiration">
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="addBookmark()">Save bookmark</button>
+          <button class="btn" onclick="showPanel('library')">Cancel</button>
+          <span class="ai-status" id="form-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAGS PANEL -->
+    <div class="panel" id="panel-tags">
+      <div class="panel-header">
+        <h1 class="panel-title">Tag <em>cloud</em></h1>
+      </div>
+      <div class="tag-cloud" id="tag-cloud"></div>
+      <hr class="divider">
+      <div class="bookmark-grid" id="tag-results"></div>
+    </div>
+
+    <!-- SETUP PANEL -->
+    <div class="panel" id="panel-setup">
+      <div class="panel-header">
+        <h1 class="panel-title">API <em>setup</em></h1>
+      </div>
+      <div class="setup-card">
+        <h3>OpenAI API Key</h3>
+        <p>Bookmark OS uses GPT-4o-mini to generate smart, contextual tags for your bookmarks. Your API key is stored exclusively in your browser's localStorage — it never leaves your device through this app.</p>
+        <div class="setup-warning">
+          ⚠ Your API key is stored in localStorage and is readable by JavaScript on this page. Use only on trusted devices. For production use, consider a server-side proxy.
+        </div>
+        <div class="form-row">
+          <label class="form-label">API Key</label>
+          <input class="form-input" id="setup-key" type="password" placeholder="sk-…" autocomplete="off">
+        </div>
+        <div class="form-actions" style="margin-bottom:16px;">
+          <button class="btn btn-primary" onclick="saveApiKey()">Save key</button>
+          <button class="btn" onclick="testApiKey()">Test connection</button>
+          <button class="btn btn-danger" onclick="removeApiKey()">Remove</button>
+        </div>
+        <div id="key-status" style="font-size:12px; color: var(--text3); margin-top:8px;"></div>
+      </div>
+
+      <hr class="divider" style="max-width:520px;">
+
+      <div class="setup-card" style="margin-top:0;">
+        <h3>Data management</h3>
+        <p>Bookmarks are stored server-side via <code style="color:var(--accent2);font-family:var(--font-mono);font-size:11px;">book_man_api.php</code>. Export to keep a local backup, or import from a previous export. The OpenAI API key is stored only in this browser's localStorage.</p>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="exportData()">Export JSON</button>
+          <button class="btn" onclick="document.getElementById('import-file').click()">Import JSON</button>
+          <button class="btn btn-danger" onclick="clearAllData()">Clear all</button>
+        </div>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let bookmarks = [];
+let activeTagFilter = null;
+const API = 'book_man_api.php';
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+async function init() {
+  updateApiIndicator();
+  checkApiKeyNotice();
+  await loadFromServer();
+  document.getElementById('dummy-main-search').focus;      
+}
+
+async function loadFromServer() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    bookmarks = await res.json();
+    updateUI();
+  } catch(e) {
+    console.error('Failed to load bookmarks:', e);
+    toast('Cannot reach book_man_api.php — check server.', 'error');
+    bookmarks = [];
+    updateUI();
+  }
+}
+
+async function saveToServer(bookmark) {
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookmark)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'HTTP ' + res.status);
+  }
+  return await res.json();
+}
+
+async function deleteFromServer(id) {
+  const res = await fetch(API, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'HTTP ' + res.status);
+  }
+  return await res.json();
+}
+
+async function updateOnServer(bookmark) {
+  const res = await fetch(API, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookmark)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'HTTP ' + res.status);
+  }
+  return await res.json();
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  const nav = document.getElementById('nav-' + name);
+  if (nav) nav.classList.add('active');
+  if (name === 'tags') renderTagCloud();
+  if (name === 'library') filterBookmarks();
+  if (name === 'add') checkApiKeyNotice();
+  if (name === 'setup') loadSetupKey();
+}
+
+// ─── API KEY ──────────────────────────────────────────────────────────────────
+function getApiKey() { return localStorage.getItem('bm_openai_key') || ''; }
+
+function saveApiKey() {
+  const key = document.getElementById('setup-key').value.trim();
+  if (!key) { toast('Enter a key first.', 'error'); return; }
+  if (!key.startsWith('sk-')) { toast('Key should start with sk-', 'error'); return; }
+  localStorage.setItem('bm_openai_key', key);
+  toast('API key saved.', 'success');
+  updateApiIndicator();
+  checkApiKeyNotice();
+  setKeyStatus('<span class="status-dot green"></span> Key stored in localStorage');
+}
+
+function removeApiKey() {
+  if (!confirm('Remove the stored API key?')) return;
+  localStorage.removeItem('bm_openai_key');
+  document.getElementById('setup-key').value = '';
+  toast('API key removed.', 'info');
+  updateApiIndicator();
+  checkApiKeyNotice();
+  setKeyStatus('<span class="status-dot gray"></span> No key stored');
+}
+
+async function testApiKey() {
+  const key = document.getElementById('setup-key').value.trim() || getApiKey();
+  if (!key) { toast('No key to test.', 'error'); return; }
+  setKeyStatus('<span class="spinner"></span> Testing…');
+  try {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': 'Bearer ' + key }
+    });
+    if (res.ok) {
+      setKeyStatus('<span class="status-dot green"></span> Connection successful — key is valid');
+      toast('OpenAI connection OK!', 'success');
+    } else {
+      const err = await res.json();
+      setKeyStatus('<span class="status-dot red"></span> Error: ' + (err.error?.message || res.status));
+      toast('Key invalid or error.', 'error');
+    }
+  } catch(e) {
+    setKeyStatus('<span class="status-dot red"></span> Network error: ' + e.message);
+    toast('Network error.', 'error');
+  }
+}
+
+function loadSetupKey() {
+  const key = getApiKey();
+  if (key) {
+    document.getElementById('setup-key').value = key;
+    setKeyStatus('<span class="status-dot green"></span> Key loaded from localStorage (' + key.slice(0,8) + '…)');
+  } else {
+    setKeyStatus('<span class="status-dot gray"></span> No key stored');
+  }
+}
+
+function setKeyStatus(html) {
+  document.getElementById('key-status').innerHTML = html;
+}
+
+function updateApiIndicator() {
+  const ind = document.getElementById('api-indicator');
+  ind.textContent = getApiKey() ? '✓' : '!';
+  ind.style.color = getApiKey() ? 'var(--accent)' : 'var(--red)';
+  ind.style.background = getApiKey() ? 'var(--accent-dim)' : 'var(--red-dim)';
+}
+
+function checkApiKeyNotice() {
+  const notice = document.getElementById('no-api-add');
+  if (notice) notice.style.display = getApiKey() ? 'none' : 'flex';
+}
+
+// ─── AI TAGGING ───────────────────────────────────────────────────────────────
+async function generateTagsAI(title, url, notes) {
+  const key = getApiKey();
+  const prompt = `You are a bookmark tagging assistant. Analyze the following bookmark and return 3–6 concise, lowercase tags that describe its topic, category, and use case. Return ONLY a JSON array of strings, nothing else.
+
+Title: ${title}
+URL: ${url}
+Notes: ${notes || 'none'}
+
+Example output: ["design","tools","typography","web","free"]`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + key
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 80
+      })
+    });
+    if (!res.ok) throw new Error('API error ' + res.status);
+    const data = await res.json();
+    const raw = data.choices[0].message.content.trim();
+    const tags = JSON.parse(raw);
+    if (Array.isArray(tags)) return { tags, aiTagged: true };
+    throw new Error('Not an array');
+  } catch(e) {
+    console.warn('AI tagging failed, using fallback:', e);
+    return { tags: fallbackTags(title + ' ' + (notes || '')), aiTagged: false };
+  }
+}
+
+function fallbackTags(text) {
+  const vocab = ['technology','research','article','design','development','ai','media','reference',
+    'tool','tutorial','news','video','music','science','business','marketing','productivity'];
+  const lower = text.toLowerCase();
+  const found = vocab.filter(t => lower.includes(t));
+  return found.length ? found.slice(0, 4) : ['general'];
+}
+
+// ─── ADD BOOKMARK ─────────────────────────────────────────────────────────────
+async function addBookmark() {
+  const title = document.getElementById('f-title').value.trim();
+  const url = document.getElementById('f-url').value.trim();
+  const notes = document.getElementById('f-notes').value.trim();
+  const manualTagsRaw = document.getElementById('f-tags').value.trim();
+
+  if (!title) { toast('Title is required.', 'error'); return; }
+  if (!url) { toast('URL is required.', 'error'); return; }
+  try { new URL(url); } catch(e) { toast('Enter a valid URL.', 'error'); return; }
+
+  const manualTags = manualTagsRaw ? manualTagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
+
+  setFormStatus('loading', '<span class="spinner"></span> Generating AI tags…');
+
+  let aiResult;
+  if (getApiKey()) {
+    aiResult = await generateTagsAI(title, url, notes);
+  } else {
+    aiResult = { tags: fallbackTags(title + ' ' + notes), aiTagged: false };
+  }
+
+  const allTags = [...new Set([...aiResult.tags, ...manualTags])];
+
+  const bm = {
+    id: Date.now().toString(),
+    title, url, notes,
+    tags: allTags,
+    aiTagged: aiResult.aiTagged,
+    createdAt: new Date().toISOString()
+  };
+
+  setFormStatus('loading', '<span class="spinner"></span> Saving to server…');
+
+  try {
+    const resp = await saveToServer(bm);
+    const saved = (resp && resp.bookmark) ? resp.bookmark : bm;
+    bookmarks.unshift(saved);
+    updateUI();
+
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-url').value = '';
+    document.getElementById('f-notes').value = '';
+    document.getElementById('f-tags').value = '';
+
+    const msg = aiResult.aiTagged ? 'Bookmark saved with AI tags!' : 'Bookmark saved (fallback tags used).';
+    setFormStatus(aiResult.aiTagged ? 'ok' : 'err', msg);
+    toast(msg, aiResult.aiTagged ? 'success' : 'info');
+    setTimeout(() => { setFormStatus('', ''); showPanel('library'); }, 1500);
+  } catch(e) {
+    setFormStatus('err', 'Server error: ' + e.message);
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+function setFormStatus(type, html) {
+  const el = document.getElementById('form-status');
+  el.className = 'ai-status ' + type;
+  el.innerHTML = html;
+}
+
+// ─── RE-TAG WITH AI ───────────────────────────────────────────────────────────
+async function retagBookmark(id) {
+  if (!getApiKey()) { toast('Set an API key in Setup first.', 'error'); return; }
+  const bm = bookmarks.find(b => b.id === id);
+  if (!bm) return;
+  toast('Re-tagging with AI…', 'info');
+  const result = await generateTagsAI(bm.title, bm.url, bm.notes);
+  bm.tags = result.tags;
+  bm.aiTagged = result.aiTagged;
+  try {
+    await updateOnServer(bm);
+    updateUI();
+    toast('Tags updated!', 'success');
+  } catch(e) {
+    toast('Retag save failed: ' + e.message, 'error');
+  }
+}
+
+// ─── DELETE ───────────────────────────────────────────────────────────────────
+async function deleteBookmark(id) {
+  try {
+    await deleteFromServer(id);
+    bookmarks = bookmarks.filter(b => b.id !== id);
+    updateUI();
+    toast('Bookmark removed.', 'info');
+  } catch(e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderBookmarks(list, containerId) {
+  const grid = document.getElementById(containerId);
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="big">◈</div><p>No bookmarks match.</p></div>';
+    return;
+  }
+  grid.innerHTML = list.map(b => `
+    <div class="bookmark-card">
+      <div class="bm-title">${escHtml(b.title)}</div>
+      <a class="bm-url" href="${escHtml(b.url)}" target="_blank">${escHtml(b.url)}</a>
+      ${b.notes ? `<div class="bm-notes">${escHtml(b.notes)}</div>` : ''}
+      <div class="bm-tags">
+        ${b.tags.map(t => `<span class="bm-tag" onclick="filterByTag('${escHtml(t)}')">${escHtml(t)}</span>`).join('')}
+        ${b.aiTagged ? '<span class="ai-badge">✦ AI</span>' : ''}
+      </div>
+      <div class="bm-footer">
+        <span class="bm-date">${formatDate(b.createdAt)}</span>
+        <div class="bm-actions">
+          <button class="bm-btn ai-tag-btn" onclick="retagBookmark('${b.id}')">✦ retag</button>
+          <button class="bm-btn" onclick="deleteBookmark('${b.id}')">× delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterBookmarks() {
+  const q = document.getElementById('main-search').value.toLowerCase();
+  let list = bookmarks;
+  if (activeTagFilter) {
+    list = list.filter(b => b.tags.includes(activeTagFilter));
+    document.getElementById('active-filter-bar').style.display = 'flex';
+    document.getElementById('active-filter-tag').textContent = activeTagFilter;
+  } else {
+    document.getElementById('active-filter-bar').style.display = 'none';
+  }
+  if (q) {
+    list = list.filter(b =>
+      b.title.toLowerCase().includes(q) ||
+      (b.notes || '').toLowerCase().includes(q) ||
+      b.url.toLowerCase().includes(q) ||
+      b.tags.some(t => t.includes(q))
+    );
+  }
+  renderBookmarks(list, 'bookmark-grid');
+}
+
+function clearSearch() {
+  document.getElementById('main-search').value = '';
+  activeTagFilter = null;
+  filterBookmarks();
+}
+
+function filterByTag(tag) {
+  activeTagFilter = tag;
+  showPanel('library');
+  filterBookmarks();
+}
+
+function clearTagFilter() {
+  activeTagFilter = null;
+  filterBookmarks();
+}
+
+// ─── TAG CLOUD ────────────────────────────────────────────────────────────────
+function renderTagCloud() {
+  const tagMap = {};
+  bookmarks.forEach(b => b.tags.forEach(t => { tagMap[t] = (tagMap[t] || 0) + 1; }));
+  const sorted = Object.entries(tagMap).sort((a, b) => b[1] - a[1]);
+
+  const cloud = document.getElementById('tag-cloud');
+  if (!sorted.length) {
+    cloud.innerHTML = '<span style="color:var(--text3)">No tags yet. Add some bookmarks.</span>';
+    document.getElementById('tag-results').innerHTML = '';
+    return;
+  }
+
+  const max = sorted[0][1];
+  cloud.innerHTML = sorted.map(([tag, count]) => {
+    const size = 11 + Math.round((count / max) * 14);
+    return `<span class="cloud-tag" style="font-size:${size}px" onclick="filterTagCloud('${escHtml(tag)}')">${escHtml(tag)} <span style="font-size:10px;color:var(--text3)">${count}</span></span>`;
+  }).join('');
+
+  renderBookmarks(bookmarks, 'tag-results');
+}
+
+function filterTagCloud(tag) {
+  const results = bookmarks.filter(b => b.tags.includes(tag));
+  renderBookmarks(results, 'tag-results');
+  document.querySelectorAll('.cloud-tag').forEach(el => el.classList.remove('active'));
+  event.target.closest('.cloud-tag').classList.add('active');
+}
+
+// ─── SIDEBAR QUICK TAGS ───────────────────────────────────────────────────────
+function updateSidebarTags() {
+  const tagMap = {};
+  bookmarks.forEach(b => b.tags.forEach(t => { tagMap[t] = (tagMap[t] || 0) + 1; }));
+  const top = Object.entries(tagMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const container = document.getElementById('sidebar-tags');
+  container.innerHTML = top.map(([tag, count]) => `
+    <button class="sidebar-item" onclick="filterByTag('${escHtml(tag)}')">
+      <span class="icon" style="font-size:10px;">#</span> ${escHtml(tag)}
+      <span class="sidebar-count">${count}</span>
+    </button>
+  `).join('');
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-total').textContent = bookmarks.length;
+  document.getElementById('count-all').textContent = bookmarks.length;
+  document.getElementById('stat-ai').textContent = bookmarks.filter(b => b.aiTagged).length;
+  const allTags = new Set(bookmarks.flatMap(b => b.tags));
+  document.getElementById('stat-tags').textContent = allTags.size;
+  const weekAgo = Date.now() - 7 * 86400 * 1000;
+  document.getElementById('stat-week').textContent = bookmarks.filter(b => new Date(b.createdAt) > weekAgo).length;
+}
+
+// ─── GLOBAL UPDATE ────────────────────────────────────────────────────────────
+function updateUI() {
+  filterBookmarks();
+  updateStats();
+  updateSidebarTags();
+}
+
+// ─── IMPORT / EXPORT ──────────────────────────────────────────────────────────
+function exportData() {
+  const blob = new Blob([JSON.stringify({ bookmarks, exported: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bookmarks-os-export.json';
+  a.click();
+  toast('Exported!', 'success');
+}
+
+async function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const imported = data.bookmarks || (Array.isArray(data) ? data : []);
+      let ok = 0, fail = 0;
+      for (const bm of imported) {
+        try { await saveToServer(bm); ok++; } catch(err) { fail++; }
+      }
+      await loadFromServer();
+      toast(`Imported ${ok} bookmarks${fail ? ', ' + fail + ' failed' : ''}.`, 'success');
+    } catch(e) {
+      toast('Invalid file.', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+async function clearAllData() {
+  if (!confirm('Delete ALL bookmarks? This cannot be undone.')) return;
+  let ok = 0;
+  for (const bm of [...bookmarks]) {
+    try { await deleteFromServer(bm.id); ok++; } catch(e) {}
+  }
+  await loadFromServer();
+  toast(`Cleared ${ok} bookmarks.`, 'info');
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 2500);
+  setTimeout(() => t.remove(), 2800);
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ─── KEYBOARD SHORTCUT ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    showPanel('library');
+    document.getElementById('main-search').focus();
+  }
+});
+
+// ─── START ────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
+
+
+
