@@ -1177,37 +1177,6 @@ async function takeScreenshot() {
   const frame = document.getElementById('main-frame');
   if (!frame || frame.style.display === 'none') { toast('No page loaded', 'err'); return; }
 
-  // ── Primary: Screen Capture API (pixel-perfect, captures everything) ──────────
-  if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-    try {
-      toast('Select the window/tab to capture…', 'ok');
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'window', width: { ideal: 3840 }, height: { ideal: 2160 } },
-        audio: false
-      });
-      const video  = document.createElement('video');
-      video.srcObject = stream;
-      await new Promise(r => { video.onloadedmetadata = r; });
-      video.play();
-      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const canvas = document.createElement('canvas');
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      stream.getTracks().forEach(t => t.stop());
-      openAnnotator(canvas.toDataURL('image/png'));
-      return;
-    } catch (e) {
-      if (e.name === 'NotAllowedError') {
-        // User denied — fall through to html2canvas fallback silently
-      } else {
-        toast('Screen capture failed: ' + e.message + ' — trying fallback…', 'err');
-      }
-    }
-  }
-
-  // ── Fallback: html2canvas composite (outer UI + iframe inner content) ─────────
-  toast('Capturing with fallback (may be approximate)…', 'ok');
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
   const loadH2C = async (win, doc) => {
@@ -1221,24 +1190,46 @@ async function takeScreenshot() {
     });
   };
 
+  const captureIframe = async (useForeignObject) => {
+    const iwin = frame.contentWindow;
+    const idoc = frame.contentDocument;
+    if (!idoc) return null;
+    const root = idoc.documentElement || idoc.body;
+    const h2c  = await loadH2C(iwin, idoc);
+    const bgRaw = getComputedStyle(root).backgroundColor;
+    const bg    = (bgRaw && bgRaw !== 'rgba(0, 0, 0, 0)') ? bgRaw : '#ffffff';
+    return h2c(root, {
+      useCORS: true, allowTaint: true, logging: false,
+      foreignObjectRendering: useForeignObject,
+      scale: dpr,
+      width:        frame.clientWidth,
+      height:       frame.clientHeight,
+      windowWidth:  frame.clientWidth,
+      windowHeight: frame.clientHeight,
+      backgroundColor: bg
+    });
+  };
+
   try {
+    // ── 1. Capture iframe content ──────────────────────────────────────────────
+    // Try foreignObjectRendering first (uses browser real CSS engine — handles
+    // gradients, external fonts, flex/grid, custom properties).
+    // Fall back to plain html2canvas if it errors.
     let iframeDataUrl = null;
     try {
-      const iwin = frame.contentWindow;
-      const idoc = frame.contentDocument;
-      if (idoc && (idoc.body || idoc.documentElement)) {
-        const root = idoc.documentElement || idoc.body;
-        const bg   = getComputedStyle(root).backgroundColor;
-        const h2c  = await loadH2C(iwin, idoc);
-        const c    = await h2c(root, {
-          useCORS: true, allowTaint: true, logging: false,
-          foreignObjectRendering: true, scale: dpr,
-          backgroundColor: (bg && bg !== 'rgba(0, 0, 0, 0)') ? bg : '#ffffff'
-        });
-        iframeDataUrl = c.toDataURL('image/png');
+      const c = await captureIframe(true);
+      if (c) iframeDataUrl = c.toDataURL('image/png');
+    } catch (e1) {
+      console.warn('foreignObject capture failed, retrying plain:', e1);
+      try {
+        const c = await captureIframe(false);
+        if (c) iframeDataUrl = c.toDataURL('image/png');
+      } catch (e2) {
+        console.warn('plain capture also failed:', e2);
       }
-    } catch (_) { /* inner capture failed, continue without */ }
+    }
 
+    // ── 2. Capture outer UI (topbar + panels, skip blank iframe area) ──────────
     const h2c = await loadH2C(window, document);
     const outerCanvas = await h2c(document.body, {
       useCORS: true, allowTaint: true, logging: false, scale: dpr,
@@ -1250,6 +1241,7 @@ async function takeScreenshot() {
       return;
     }
 
+    // ── 3. Composite: paint iframe over outer UI at exact position ─────────────
     const fRect  = frame.getBoundingClientRect();
     const scrollX = window.scrollX || 0;
     const scrollY = window.scrollY || 0;
@@ -1265,6 +1257,7 @@ async function takeScreenshot() {
       (fRect.left + scrollX) * dpr, (fRect.top + scrollY) * dpr,
       fRect.width * dpr, fRect.height * dpr);
     openAnnotator(final.toDataURL('image/png'));
+
   } catch (e) {
     toast('Screenshot failed: ' + e.message, 'err');
   }
