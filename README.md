@@ -1,6 +1,6 @@
 # VD Online Browser
 
-A **browser-in-browser** web application — a single PHP+HTML project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, sessions, find in page, split view, PiP, edit mode, and more.
+A **browser-in-browser** web application — a PHP+HTML+CSS+JS project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, sessions, find in page, split view, PiP, edit mode, and more.
 
 Built with a dark-themed design system (Fraunces + DM Mono, CSS custom properties), no external JS frameworks.
 
@@ -10,7 +10,9 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 
 | File | Description |
 |------|-------------|
-| `vd-browser.html` | Main browser-in-browser application (single file, all JS/CSS inline) |
+| `vd-browser.php` | Main browser-in-browser application (HTML structure + PHP cache-busting for assets) |
+| `vd-browser.css` | All styles (linked with `?v=<?php echo time(); ?>` for cache busting) |
+| `vd-browser.js` | All JavaScript logic (linked with `?v=<?php echo time(); ?>` for cache busting) |
 | `proxy.php` | Server-side cURL proxy — fetches pages and returns HTML to the browser |
 | `vd-ai-bookman.html` | Standalone AI-powered Bookmark Manager (linked from the browser sidebar) |
 | `book_man_api.php` | PHP backend API for the Bookmark Manager |
@@ -22,7 +24,7 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 
 1. Place all files in the same folder on a PHP-enabled server (Apache/Nginx + PHP 7.4+)
 2. Make sure `curl` is enabled in your PHP installation (`extension=curl`)
-3. Open `vd-browser.html` in your browser
+3. Open `vd-browser.php` in your browser
 4. In **Settings**, enter your OpenAI API key to enable AI features
 
 > **Local dev:** Use XAMPP, WAMP, Laragon, or `php -S localhost:8000`
@@ -77,12 +79,20 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 - **Preview** button opens the rebuilt page in a new tab directly in the browser
 
 ### 📸 Screenshot + Annotate _(Fase 3)_
-- `Ctrl+Shift+S` or toolbar 📷 button captures the current page via html2canvas injected into the iframe
+- `Ctrl+Shift+S` or toolbar 📷 button captures the current page
+- Screen Capture API primary (pixel-perfect, one-time browser permission) + html2canvas composite fallback
 - Opens full-screen annotation overlay with two-layer canvas (screenshot bg + draw layer)
-- **Tools**: ✏️ Pen (freehand), □ Rectangle, ↗ Arrow, T Text (inline input), ⌫ Eraser
+- **Tools**: ✏️ Pen (freehand), □ Rectangle, ↗ Arrow, T Text (inline input), ⌫ Eraser, ✂ Crop
 - Color picker + brush size slider
 - Undo stack (up to 30 steps, also `Ctrl+Z`)
 - **Download PNG** and **Copy to clipboard**
+
+### 📝 AI Form Filler _(Fase 3)_
+- Detect all form fields on the loaded page (input, select, textarea)
+- GPT-4o-mini generates context-aware suggestions based on field labels, types, and page URL
+- Editable fill panel — review and modify each value before injecting
+- Fill via native DOM events (compatible with React/Vue/Angular SPAs)
+- Works without API key (manual fill fallback)
 
 ### 🤖 AI Assistant (GPT-4o-mini, requires OpenAI API key)
 All AI actions fetch **real page content** via `proxy.php` before sending to GPT.
@@ -180,12 +190,10 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] PiP tab (floating draggable mini-window, resizable)
 - [x] Edit mode (contentEditable + formatting toolbar + save HTML)
 - [x] Page rebuilder (AI generates HTML variant from description)
-- [x] Bug fix: `buildFetchUrl()` destructuring in `splitLoadFrame` and `rebuildPage` (was sending `[object Object]` as fetch URL)
 
 ### ✅ Fase 3 — In progress
-- [x] Screenshot + annotate (📷 button / Ctrl+Shift+S; html2canvas iframe injection; draw/rect/arrow/text/eraser tools; undo, download PNG, copy to clipboard)
-  - Bug fix: topbar now captured (composite outer UI + iframe content via html2canvas `ignoreElements`); text tool fixed (correct positioning relative to canvas container, `committed` flag prevents double-fire, font uses safe `monospace` fallback)
-- [x] AI form filler (detect forms, GPT-4o-mini autofill suggestions, manual edit, fill via postMessage with input/change event dispatch)
+- [x] Screenshot + annotate (📷 / Ctrl+Shift+S; Screen Capture API + html2canvas fallback; pen/rect/arrow/text/eraser/crop tools; undo, download PNG, copy clipboard)
+- [x] AI form filler (detect forms, GPT-4o-mini suggestions, manual edit, direct DOM injection)
 - [ ] Password manager panel (per-domain credentials, autofill)
 - [ ] Page & asset download as ZIP (JSZip + proxy multi-fetch)
 
