@@ -184,7 +184,8 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 
 ### ✅ Fase 3 — In progress
 - [x] Screenshot + annotate (📷 button / Ctrl+Shift+S; html2canvas iframe injection; draw/rect/arrow/text/eraser tools; undo, download PNG, copy to clipboard)
-- [ ] AI form filler (detect forms, GPT autofill via postMessage)
+  - Bug fix: topbar now captured (composite outer UI + iframe content via html2canvas `ignoreElements`); text tool fixed (correct positioning relative to canvas container, `committed` flag prevents double-fire, font uses safe `monospace` fallback)
+- [x] AI form filler (detect forms, GPT-4o-mini autofill suggestions, manual edit, fill via postMessage with input/change event dispatch)
 - [ ] Password manager panel (per-domain credentials, autofill)
 - [ ] Page & asset download as ZIP (JSZip + proxy multi-fetch)
 
