@@ -1104,7 +1104,7 @@ async function _handleFormData(fields) {
   }
   _ffFields = fields;
   list.innerHTML = '<div class="ff-empty">Asking AI for suggestions…</div>';
-  const key = (localStorage.getItem('vdb-cfg') ? JSON.parse(localStorage.getItem('vdb-cfg')) : {}).apiKey || '';
+  const key = cfg.key || '';
   if (!key) {
     _renderFormFields(fields, fields.map(() => ''));
     toast('Add OpenAI API key in Settings for smart suggestions', 'err');
