@@ -108,6 +108,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .ann-sep{width:1px;height:22px;background:var(--border);margin:0 2px;flex-shrink:0;}
 .ann-canvas-wrap{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#2a2c26 0% 25%, #222420 0% 50%) 0 0/20px 20px;position:relative;}
 .ann-text-input{position:absolute;background:transparent;border:1px dashed var(--accent);color:var(--accent);font-family:var(--font-mono);font-size:14px;outline:none;min-width:60px;padding:2px 4px;z-index:2;white-space:nowrap;}
+/* ── FORM FILLER ── */
+.ff-field{display:flex;flex-direction:column;gap:3px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3);margin-bottom:6px;}
+.ff-label{font-size:10px;color:var(--text3);letter-spacing:.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ff-input{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);padding:4px 7px;font-size:12px;font-family:var(--font-mono);width:100%;box-sizing:border-box;}
+.ff-input:focus{outline:none;border-color:var(--accent);}
+.ff-empty{font-size:11px;color:var(--text3);font-style:italic;padding:6px 0;}
 /* ── EDIT TOOLBAR ── */
 .edit-toolbar{display:none;align-items:center;gap:2px;padding:4px 8px;background:var(--bg2);border-bottom:2px solid var(--amber);flex-shrink:0;flex-wrap:wrap;}
 .edit-toolbar.visible{display:flex;}
@@ -327,6 +333,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
           </div>
           <div class="tg-meta" id="tg-meta"></div>
           <div id="tg-list"></div>
+        </div>
+        <div class="sec-lbl" style="margin-top:12px;">Form Filler (AI)</div>
+        <button class="act-btn" id="ff-detect-btn" onclick="detectForms()">&#128269; Detect &amp; analyze forms</button>
+        <div id="ff-area" style="display:none;margin-top:6px;">
+          <div id="ff-fields"></div>
+          <div style="display:flex;gap:5px;margin-top:4px;">
+            <button class="act-btn primary" style="flex:1;" onclick="fillForms()">&#128137; Fill all fields</button>
+            <button class="act-btn" style="flex:0 0 auto;" onclick="document.getElementById('ff-area').style.display='none';">&#10005;</button>
+          </div>
         </div>
         <div class="sec-lbl" style="margin-top:12px;">Page rebuilder (AI)</div>
         <textarea class="mini-input" id="rebuild-prompt" rows="2"
@@ -1044,6 +1059,117 @@ function updateAiStatus() {
 
 function setReaderFont(v) { document.getElementById('reader-out').style.fontSize = v + 'px'; }
 
+// ── FORM FILLER ────────────────────────────────
+let _ffFields = []; // current detected fields
+
+function detectForms() {
+  const fr = document.getElementById('main-frame');
+  if (!fr || fr.style.display === 'none') { toast('No page loaded', 'err'); return; }
+  const btn = document.getElementById('ff-detect-btn');
+  const area = document.getElementById('ff-area');
+  const list = document.getElementById('ff-fields');
+  btn.disabled = true; btn.textContent = '⏳ Detecting…';
+  list.innerHTML = '<div class="ff-empty">Scanning page for form fields…</div>';
+  area.style.display = 'block';
+  fr.contentWindow?.postMessage({ type: 'vdbFormDetect' }, '*');
+  // timeout safety
+  setTimeout(() => { if (btn.disabled) { btn.disabled = false; btn.innerHTML = '&#128269; Detect &amp; analyze forms'; } }, 8000);
+}
+
+async function _handleFormData(fields) {
+  const btn  = document.getElementById('ff-detect-btn');
+  const list = document.getElementById('ff-fields');
+  btn.disabled = false; btn.innerHTML = '&#128269; Detect &amp; analyze forms';
+  if (!fields.length) {
+    list.innerHTML = '<div class="ff-empty">No fillable form fields found on this page.</div>';
+    return;
+  }
+  _ffFields = fields;
+  list.innerHTML = '<div class="ff-empty">Asking AI for suggestions…</div>';
+  const key = (localStorage.getItem('vdb-cfg') ? JSON.parse(localStorage.getItem('vdb-cfg')) : {}).apiKey || '';
+  if (!key) {
+    _renderFormFields(fields, fields.map(() => ''));
+    toast('Add OpenAI API key in Settings for smart suggestions', 'err');
+    return;
+  }
+  const t = getTab();
+  const url = t?.url || window.location.href;
+  const fieldDesc = fields.map(f =>
+    `Field ${f.idx}: label="${f.label||f.placeholder||f.name||'(unnamed)'" type="${f.type}" name="${f.name}"` +
+    (f.options.length ? ` options=[${f.options.slice(0,8).join(', ')}]` : '')
+  ).join('\n');
+  const sysMsg = `You are an AI that suggests realistic form fill values. Given a page URL and its form fields, respond with a JSON array of objects {idx, value}. Only fill fields that make sense (skip passwords, CAPTCHAs, file uploads). Use realistic placeholder data. For select fields, choose from the provided options.`;
+  const userMsg = `Page URL: ${url}\n\nForm fields:\n${fieldDesc}\n\nRespond ONLY with a JSON array, no explanation. Example: [{"idx":0,"value":"John Doe"},{"idx":1,"value":"john@example.com"}]`;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: sysMsg }, { role: 'user', content: userMsg }], max_tokens: 400 })
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error?.message || res.statusText);
+    let raw = j.choices[0].message.content.trim();
+    raw = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    const suggestions = JSON.parse(raw);
+    const valMap = {};
+    suggestions.forEach(s => { valMap[s.idx] = s.value; });
+    _renderFormFields(fields, fields.map(f => valMap[f.idx] || ''));
+  } catch(e) {
+    _renderFormFields(fields, fields.map(() => ''));
+    toast('AI suggestions failed: ' + e.message, 'err');
+  }
+}
+
+function _renderFormFields(fields, values) {
+  const list = document.getElementById('ff-fields');
+  list.innerHTML = '';
+  if (!fields.length) { list.innerHTML = '<div class="ff-empty">No fillable fields found.</div>'; return; }
+  fields.forEach((f, i) => {
+    const label = f.label || f.placeholder || f.name || `Field ${f.idx}`;
+    const type  = f.type || f.tag;
+    const val   = values[i] || '';
+    const wrap  = document.createElement('div');
+    wrap.className = 'ff-field';
+    wrap.innerHTML = `<div class="ff-label" title="${label} (${type})">${label} <span style="opacity:.5;">[${type}]</span></div>`;
+    if (f.tag === 'select' && f.options.length) {
+      const sel = document.createElement('select');
+      sel.className = 'ff-input';
+      sel.dataset.ffIdx = f.idx;
+      f.options.forEach((opt, oi) => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (opt.toLowerCase().includes((val||'').toLowerCase())) o.selected = true;
+        sel.appendChild(o);
+      });
+      wrap.appendChild(sel);
+    } else if (f.type === 'textarea' || f.tag === 'textarea') {
+      const ta = document.createElement('textarea');
+      ta.className = 'ff-input'; ta.rows = 2;
+      ta.dataset.ffIdx = f.idx; ta.value = val;
+      ta.style.resize = 'vertical';
+      wrap.appendChild(ta);
+    } else {
+      const inp = document.createElement('input');
+      inp.className = 'ff-input';
+      inp.type = ['password','email','url','number','tel'].includes(f.type) ? f.type : 'text';
+      inp.dataset.ffIdx = f.idx; inp.value = val;
+      inp.placeholder = f.placeholder || '';
+      wrap.appendChild(inp);
+    }
+    list.appendChild(wrap);
+  });
+}
+
+function fillForms() {
+  const fr  = document.getElementById('main-frame');
+  const els = document.querySelectorAll('#ff-fields [data-ff-idx]');
+  if (!els.length) { toast('No fields to fill', 'err'); return; }
+  const values = Array.from(els).map(el => ({ idx: +el.dataset.ffIdx, value: el.value })).filter(v => v.value);
+  if (!values.length) { toast('All fields are empty — add values first', 'err'); return; }
+  fr.contentWindow?.postMessage({ type: 'vdbFormFill', values }, '*');
+  toast(`Filled ${values.length} field${values.length>1?'s':''}`, 'ok');
+}
+
 // ── SCREENSHOT ────────────────────────────────
 const ann = { tool:'pen', color:'#c8f060', size:3, drawing:false, sx:0, sy:0, undoStack:[], screenshotImg:null };
 
@@ -1543,6 +1669,9 @@ window.addEventListener('message', e => {
     a.click();
     toast('Edited page saved!', 'ok');
   }
+  if (e.data?.type === 'vdbFormData') {
+    _handleFormData(e.data.fields || []);
+  }
 });
 
 // Inject find + edit controller scripts into srcdoc HTML
@@ -1600,6 +1729,26 @@ function injectFindScript(html) {
     '      try{document.execCommand(d.cmd,false,d.val||null);}catch(ex){}',
     '    }else if(d.type==="vdbEditGet"){',
     '      window.parent.postMessage({type:"vdbEditHtml",html:document.documentElement.outerHTML},"*");',
+    '    }else if(d.type==="vdbFormDetect"){',
+    '      var flds=[],sel="input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]):not([type=file]),select,textarea";',
+    '      document.querySelectorAll(sel).forEach(function(el,i){',
+    '        var lbl="";',
+    '        if(el.id){var L=document.querySelector("label[for=\""+el.id+"\"]");if(L)lbl=L.textContent.trim();}',
+    '        if(!lbl){var P=el.closest("label");if(P)lbl=P.textContent.trim();}',
+    '        if(!lbl)lbl=el.getAttribute("aria-label")||el.placeholder||el.name||el.id||"";',
+    '        var opts=[];',
+    '        if(el.tagName==="SELECT")Array.from(el.options).forEach(function(o){opts.push(o.text.trim());});',
+    '        flds.push({idx:i,tag:el.tagName.toLowerCase(),type:el.type||"",name:el.name||el.id||"",label:lbl.trim(),placeholder:el.placeholder||"",options:opts});',
+    '      });',
+    '      window.parent.postMessage({type:"vdbFormData",fields:flds},"*");',
+    '    }else if(d.type==="vdbFormFill"){',
+    '      var inp=document.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]):not([type=file]),select,textarea");',
+    '      (d.values||[]).forEach(function(v){',
+    '        var el=inp[v.idx];if(!el||!v.value)return;',
+    '        if(el.tagName==="SELECT"){for(var i=0;i<el.options.length;i++){if(el.options[i].text.toLowerCase().indexOf(v.value.toLowerCase())>=0||el.options[i].value.toLowerCase()===v.value.toLowerCase()){el.selectedIndex=i;break;}}}',
+    '        else{el.value=v.value;}',
+    '        ["input","change"].forEach(function(ev){el.dispatchEvent(new Event(ev,{bubbles:true}));});',
+    '      });',
     '    }',
     '  });',
     '}());',
