@@ -97,6 +97,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .pip-btn:hover{background:var(--red-dim);color:var(--red);}
 .pip-btn.back:hover{background:var(--accent-dim);color:var(--accent);}
 .pip-iframe{flex:1;width:100%;border:none;background:#fff;}
+/* ── SCREENSHOT ANNOTATOR ── */
+.ann-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10000;display:none;flex-direction:column;}
+.ann-overlay.visible{display:flex;}
+.ann-toolbar{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.ann-tool{width:30px;height:28px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;}
+.ann-tool:hover{border-color:var(--border2);background:var(--bg);}
+.ann-tool.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.ann-tool.danger:hover{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+.ann-sep{width:1px;height:22px;background:var(--border);margin:0 2px;flex-shrink:0;}
+.ann-canvas-wrap{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#2a2c26 0% 25%, #222420 0% 50%) 0 0/20px 20px;position:relative;}
+.ann-text-input{position:absolute;background:transparent;border:1px dashed var(--accent);color:var(--accent);font-family:var(--font-mono);font-size:14px;outline:none;min-width:60px;padding:2px 4px;z-index:2;white-space:nowrap;}
 /* ── EDIT TOOLBAR ── */
 .edit-toolbar{display:none;align-items:center;gap:2px;padding:4px 8px;background:var(--bg2);border-bottom:2px solid var(--amber);flex-shrink:0;flex-wrap:wrap;}
 .edit-toolbar.visible{display:flex;}
@@ -242,7 +253,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
     <button class="bm-star" id="bm-star" onclick="quickBookmark()" title="Bookmark">&#9734;</button>
   </div>
   <div class="topbar-sep"></div>
-  <button class="nav-btn" title="Screenshot (Ctrl+Shift+S)" onclick="takeScreenshot()">&#128247;</button>
+  <button class="nav-btn" title="Screenshot + Annotate (Ctrl+Shift+S)" onclick="takeScreenshot()">&#128247;</button>
   <button class="nav-btn" title="Copy URL"                  onclick="copyUrl()">&#128279;</button>
   <button class="nav-btn" title="Open in new tab"           onclick="openInNewTab()">&#8599;</button>
   <div class="topbar-sep"></div>
@@ -1034,9 +1045,232 @@ function updateAiStatus() {
 function setReaderFont(v) { document.getElementById('reader-out').style.fontSize = v + 'px'; }
 
 // ── SCREENSHOT ────────────────────────────────
-function takeScreenshot() {
-  toast('Screenshot: use browser native Ctrl+Shift+P → "screenshot" or the OS shortcut.','ok');
+const ann = { tool:'pen', color:'#c8f060', size:3, drawing:false, sx:0, sy:0, undoStack:[], screenshotImg:null };
+
+async function takeScreenshot() {
+  const frame = document.getElementById('main-frame');
+  if (!frame || frame.style.display === 'none') { toast('No page loaded', 'err'); return; }
+  toast('Capturing…', 'ok');
+  try {
+    const iwin = frame.contentWindow;
+    const idoc = frame.contentDocument;
+    if (!idoc || !idoc.body) throw new Error('No content');
+    if (!iwin.html2canvas) {
+      await new Promise((res, rej) => {
+        const s = idoc.createElement('script');
+        s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+        s.onload = res; s.onerror = rej;
+        (idoc.head || idoc.documentElement).appendChild(s);
+      });
+    }
+    const c = await iwin.html2canvas(idoc.body, { useCORS:true, allowTaint:true, logging:false, scale: Math.min(window.devicePixelRatio||1, 2) });
+    openAnnotator(c.toDataURL('image/png'));
+  } catch(e) {
+    // Fallback: capture iframe element from parent
+    try {
+      if (!window.html2canvas) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      const c = await window.html2canvas(frame, { useCORS:true, allowTaint:true, logging:false });
+      openAnnotator(c.toDataURL('image/png'));
+    } catch(e2) { toast('Screenshot failed: ' + e2.message, 'err'); }
+  }
 }
+
+function openAnnotator(dataUrl) {
+  const overlay = document.getElementById('ann-overlay');
+  const wrap    = document.getElementById('ann-canvas-wrap');
+  overlay.classList.add('visible');
+  const img = new Image();
+  img.onload = () => {
+    ann.screenshotImg = img;
+    ann.undoStack = [];
+    const bg   = document.getElementById('ann-bg');
+    const draw = document.getElementById('ann-draw');
+    const cont = document.getElementById('ann-canvas-container');
+    bg.width = draw.width = img.naturalWidth;
+    bg.height = draw.height = img.naturalHeight;
+    bg.getContext('2d').drawImage(img, 0, 0);
+    draw.getContext('2d').clearRect(0, 0, draw.width, draw.height);
+    const maxW = wrap.clientWidth - 40;
+    const scale = Math.min(1, maxW / img.naturalWidth);
+    const dispW = Math.round(img.naturalWidth  * scale);
+    const dispH = Math.round(img.naturalHeight * scale);
+    bg.style.width = draw.style.width = dispW + 'px';
+    bg.style.height = draw.style.height = dispH + 'px';
+  };
+  img.src = dataUrl;
+}
+
+function closeAnnotator() {
+  document.getElementById('ann-overlay').classList.remove('visible');
+  // remove any floating text input
+  document.querySelectorAll('.ann-text-input').forEach(el => el.remove());
+}
+
+function setAnnTool(t) {
+  ann.tool = t;
+  ['pen','rect','arrow','text','erase'].forEach(x => {
+    const b = document.getElementById('ann-t-' + x);
+    if (b) b.classList.toggle('active', x === t);
+  });
+}
+
+function _annPos(e, canvas) {
+  const r = canvas.getBoundingClientRect();
+  const sx = canvas.width  / r.width;
+  const sy = canvas.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - r.left) * sx, y: (src.clientY - r.top) * sy };
+}
+
+function _annSaveUndo() {
+  const draw = document.getElementById('ann-draw');
+  const ctx  = draw.getContext('2d');
+  ann.undoStack.push(ctx.getImageData(0, 0, draw.width, draw.height));
+  if (ann.undoStack.length > 30) ann.undoStack.shift();
+}
+
+function annMouseDown(e) {
+  if (e.button !== 0 && !e.touches) return;
+  const draw = document.getElementById('ann-draw');
+  const pos  = _annPos(e, draw);
+  if (ann.tool === 'text') { annPlaceText(e, draw, pos); return; }
+  _annSaveUndo();
+  ann.drawing = true;
+  ann.sx = pos.x; ann.sy = pos.y;
+  const ctx = draw.getContext('2d');
+  ctx.strokeStyle = ann.tool === 'erase' ? 'rgba(0,0,0,1)' : ann.color;
+  ctx.lineWidth   = ann.tool === 'erase' ? ann.size * 3 : ann.size;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  if (ann.tool === 'erase') ctx.globalCompositeOperation = 'destination-out';
+  else ctx.globalCompositeOperation = 'source-over';
+  if (ann.tool === 'pen' || ann.tool === 'erase') { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
+}
+
+function annMouseMove(e) {
+  if (!ann.drawing) return;
+  e.preventDefault();
+  const draw = document.getElementById('ann-draw');
+  const pos  = _annPos(e, draw);
+  const ctx  = draw.getContext('2d');
+  if (ann.tool === 'pen' || ann.tool === 'erase') {
+    ctx.lineTo(pos.x, pos.y); ctx.stroke();
+  } else {
+    // Restore last committed state then draw preview
+    const last = ann.undoStack[ann.undoStack.length - 1];
+    if (last) ctx.putImageData(last, 0, 0);
+    else ctx.clearRect(0, 0, draw.width, draw.height);
+    ctx.strokeStyle = ann.color; ctx.lineWidth = ann.size;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'source-over';
+    if (ann.tool === 'rect') {
+      ctx.strokeRect(ann.sx, ann.sy, pos.x - ann.sx, pos.y - ann.sy);
+    } else if (ann.tool === 'arrow') {
+      _drawArrow(ctx, ann.sx, ann.sy, pos.x, pos.y);
+    }
+  }
+}
+
+function annMouseUp(e) {
+  if (!ann.drawing) return;
+  ann.drawing = false;
+  const draw = document.getElementById('ann-draw');
+  const ctx  = draw.getContext('2d');
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function _drawArrow(ctx, x1, y1, x2, y2) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const hw = Math.max(ctx.lineWidth * 3, 10);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hw * Math.cos(angle - Math.PI/6), y2 - hw * Math.sin(angle - Math.PI/6));
+  ctx.lineTo(x2 - hw * Math.cos(angle + Math.PI/6), y2 - hw * Math.sin(angle + Math.PI/6));
+  ctx.closePath(); ctx.fillStyle = ann.color; ctx.fill();
+}
+
+function annPlaceText(e, canvas, pos) {
+  document.querySelectorAll('.ann-text-input').forEach(el => el.remove());
+  const wrap  = document.getElementById('ann-canvas-wrap');
+  const cRect = canvas.getBoundingClientRect();
+  const wRect = wrap.getBoundingClientRect();
+  const input = document.createElement('input');
+  input.className = 'ann-text-input';
+  input.style.left  = (cRect.left - wRect.left + wrap.scrollLeft  + (pos.x * cRect.width  / canvas.width))  + 'px';
+  input.style.top   = (cRect.top  - wRect.top  + wrap.scrollTop   + (pos.y * cRect.height / canvas.height)) + 'px';
+  input.style.color = ann.color;
+  input.style.fontSize = Math.max(14, ann.size * 4) + 'px';
+  wrap.appendChild(input);
+  input.focus();
+  const commit = () => {
+    if (!input.value.trim()) { input.remove(); return; }
+    _annSaveUndo();
+    const draw = document.getElementById('ann-draw');
+    const ctx  = draw.getContext('2d');
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = ann.color;
+    ctx.font = `${Math.max(14, ann.size * 4)}px ${getComputedStyle(document.body).getPropertyValue('--font-mono')}`;
+    ctx.fillText(input.value, pos.x, pos.y);
+    input.remove();
+  };
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') commit(); if (ev.key === 'Escape') input.remove(); });
+  input.addEventListener('blur', commit);
+}
+
+function annUndo() {
+  if (!ann.undoStack.length) return;
+  const draw = document.getElementById('ann-draw');
+  const ctx  = draw.getContext('2d');
+  ctx.putImageData(ann.undoStack.pop(), 0, 0);
+}
+
+function annClear() {
+  _annSaveUndo();
+  const draw = document.getElementById('ann-draw');
+  draw.getContext('2d').clearRect(0, 0, draw.width, draw.height);
+}
+
+function _annComposite() {
+  const bg   = document.getElementById('ann-bg');
+  const draw = document.getElementById('ann-draw');
+  const out  = document.createElement('canvas');
+  out.width = bg.width; out.height = bg.height;
+  const ctx = out.getContext('2d');
+  ctx.drawImage(bg, 0, 0);
+  ctx.drawImage(draw, 0, 0);
+  return out;
+}
+
+function annDownload() {
+  const c = _annComposite();
+  const a = document.createElement('a');
+  a.href = c.toDataURL('image/png');
+  a.download = 'screenshot-' + Date.now() + '.png';
+  a.click();
+  toast('Screenshot saved', 'ok');
+}
+
+async function annCopy() {
+  try {
+    const c = _annComposite();
+    c.toBlob(async blob => {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast('Copied to clipboard', 'ok');
+    }, 'image/png');
+  } catch(e) { toast('Copy failed: ' + e.message, 'err'); }
+}
+
+function annUpdateSize(v) { ann.size = +v; document.getElementById('ann-size-val').textContent = v; }
+function annUpdateColor(v) { ann.color = v; }
+
+
 
 // ── SETTINGS ──────────────────────────────────
 function loadCfg() {
@@ -1101,6 +1335,8 @@ function globalKey(e) {
   if (ctrl && e.key === 'r' || e.key === 'F5') { e.preventDefault(); reloadPage(); }
   if (ctrl && e.key === 'f')              { e.preventDefault(); toggleFindBar(); }
   if (ctrl && e.key === 'e')              { e.preventDefault(); toggleEditMode(); }
+  if (ctrl && e.shiftKey && e.key === 'S'){ e.preventDefault(); takeScreenshot(); }
+  if (ctrl && e.key === 'z' && document.getElementById('ann-overlay').classList.contains('visible')) { e.preventDefault(); annUndo(); }
   if (ctrl && e.key === '\\')            { e.preventDefault(); toggleSplit(); }
   if (e.key === 'F6')                     { e.preventDefault(); document.getElementById('url-input').focus(); }
   if (e.altKey && e.key === 'ArrowLeft')  { e.preventDefault(); goBack(); }
@@ -1673,6 +1909,49 @@ boot();
   <iframe class="pip-iframe" id="pip-frame"
           sandbox="allow-same-origin allow-scripts allow-modals allow-forms allow-popups allow-pointer-lock"
           title="PiP Frame"></iframe>
+</div>
+
+<!-- ════ SCREENSHOT ANNOTATOR ════ -->
+<div class="ann-overlay" id="ann-overlay">
+  <div class="ann-toolbar">
+    <span style="font-family:var(--font-display);font-size:13px;color:var(--accent);margin-right:4px;">&#9986; Annotator</span>
+    <div class="ann-sep"></div>
+    <button class="ann-tool active" id="ann-t-pen"   onclick="setAnnTool('pen')"   title="Pen (freehand)">&#9998;</button>
+    <button class="ann-tool"        id="ann-t-rect"  onclick="setAnnTool('rect')"  title="Rectangle">&#9633;</button>
+    <button class="ann-tool"        id="ann-t-arrow" onclick="setAnnTool('arrow')" title="Arrow">&#8599;</button>
+    <button class="ann-tool"        id="ann-t-text"  onclick="setAnnTool('text')"  title="Text">T</button>
+    <button class="ann-tool"        id="ann-t-erase" onclick="setAnnTool('erase')" title="Eraser">&#9003;</button>
+    <div class="ann-sep"></div>
+    <input type="color" id="ann-color" value="#c8f060"
+           oninput="annUpdateColor(this.value)"
+           style="width:28px;height:28px;border:1px solid var(--border);border-radius:var(--r);background:none;cursor:pointer;padding:1px;"
+           title="Color">
+    <input type="range" id="ann-size" min="1" max="20" value="3"
+           oninput="annUpdateSize(this.value)"
+           style="width:64px;" title="Brush size">
+    <span id="ann-size-val" style="font-size:11px;color:var(--text3);min-width:16px;">3</span>
+    <div class="ann-sep"></div>
+    <button class="ann-tool" onclick="annUndo()"    title="Undo (Ctrl+Z)">&#8617;</button>
+    <button class="ann-tool" onclick="annClear()"   title="Clear all annotations">&#128465;</button>
+    <div style="flex:1;"></div>
+    <button class="ann-tool" onclick="annCopy()"     title="Copy to clipboard">&#128203;</button>
+    <button class="ann-tool" onclick="annDownload()" title="Download PNG">&#128190;</button>
+    <button class="ann-tool danger" onclick="closeAnnotator()" title="Close" style="margin-left:4px;">&#10005;</button>
+  </div>
+  <div class="ann-canvas-wrap" id="ann-canvas-wrap">
+    <div id="ann-canvas-container" style="position:relative;display:inline-block;">
+      <canvas id="ann-bg" style="display:block;max-width:100%;"></canvas>
+      <canvas id="ann-draw" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;"
+        onmousedown="annMouseDown(event)"
+        onmousemove="annMouseMove(event)"
+        onmouseup="annMouseUp(event)"
+        onmouseleave="annMouseUp(event)"
+        ontouchstart="annMouseDown(event)"
+        ontouchmove="annMouseMove(event)"
+        ontouchend="annMouseUp(event)">
+      </canvas>
+    </div>
+  </div>
 </div>
 
 </body>
