@@ -1177,34 +1177,66 @@ async function takeScreenshot() {
   const frame = document.getElementById('main-frame');
   if (!frame || frame.style.display === 'none') { toast('No page loaded', 'err'); return; }
   toast('Capturing…', 'ok');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  // Helper: inject html2canvas into any window/document if missing
+  const loadH2C = async (win, doc) => {
+    win = win || window; doc = doc || document;
+    if (win.html2canvas) return win.html2canvas;
+    return new Promise((res, rej) => {
+      const s = doc.createElement('script');
+      s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+      s.onload = () => res(win.html2canvas); s.onerror = rej;
+      (doc.head || doc.documentElement).appendChild(s);
+    });
+  };
+
   try {
-    const iwin = frame.contentWindow;
-    const idoc = frame.contentDocument;
-    if (!idoc || !idoc.body) throw new Error('No content');
-    if (!iwin.html2canvas) {
-      await new Promise((res, rej) => {
-        const s = idoc.createElement('script');
-        s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
-        s.onload = res; s.onerror = rej;
-        (idoc.head || idoc.documentElement).appendChild(s);
-      });
-    }
-    const c = await iwin.html2canvas(idoc.body, { useCORS:true, allowTaint:true, logging:false, scale: Math.min(window.devicePixelRatio||1, 2) });
-    openAnnotator(c.toDataURL('image/png'));
-  } catch(e) {
-    // Fallback: capture iframe element from parent
+    // Step 1: capture iframe inner content (full documentElement)
+    let iframeDataUrl = null;
     try {
-      if (!window.html2canvas) {
-        await new Promise((res, rej) => {
-          const s = document.createElement('script');
-          s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
-          s.onload = res; s.onerror = rej;
-          document.head.appendChild(s);
+      const iwin = frame.contentWindow;
+      const idoc = frame.contentDocument;
+      if (idoc && (idoc.body || idoc.documentElement)) {
+        const h2c = await loadH2C(iwin, idoc);
+        const c = await h2c(idoc.documentElement || idoc.body, {
+          useCORS: true, allowTaint: true, logging: false, scale: dpr
         });
+        iframeDataUrl = c.toDataURL('image/png');
       }
-      const c = await window.html2canvas(frame, { useCORS:true, allowTaint:true, logging:false });
-      openAnnotator(c.toDataURL('image/png'));
-    } catch(e2) { toast('Screenshot failed: ' + e2.message, 'err'); }
+    } catch (_) { /* inner capture failed, continue without */ }
+
+    // Step 2: capture full outer UI (topbar + panels), masking the iframe so it's blank
+    const h2c = await loadH2C(window, document);
+    const outerCanvas = await h2c(document.body, {
+      useCORS: true, allowTaint: true, logging: false, scale: dpr,
+      ignoreElements: el => el.id === 'main-frame'
+    });
+
+    if (!iframeDataUrl) {
+      // No iframe content available — just use outer UI
+      openAnnotator(outerCanvas.toDataURL('image/png'));
+      return;
+    }
+
+    // Step 3: composite — draw outer UI, then overlay iframe content at correct position
+    const fRect = frame.getBoundingClientRect();
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const final = document.createElement('canvas');
+    final.width  = outerCanvas.width;
+    final.height = outerCanvas.height;
+    const fCtx = final.getContext('2d');
+    fCtx.drawImage(outerCanvas, 0, 0);
+    const iframeImg = await new Promise(res => {
+      const img = new Image(); img.onload = () => res(img); img.src = iframeDataUrl;
+    });
+    fCtx.drawImage(iframeImg,
+      (fRect.left + scrollX) * dpr, (fRect.top + scrollY) * dpr,
+      fRect.width * dpr, fRect.height * dpr);
+    openAnnotator(final.toDataURL('image/png'));
+  } catch (e) {
+    toast('Screenshot failed: ' + e.message, 'err');
   }
 }
 
@@ -1324,30 +1356,44 @@ function _drawArrow(ctx, x1, y1, x2, y2) {
 
 function annPlaceText(e, canvas, pos) {
   document.querySelectorAll('.ann-text-input').forEach(el => el.remove());
-  const wrap  = document.getElementById('ann-canvas-wrap');
-  const cRect = canvas.getBoundingClientRect();
-  const wRect = wrap.getBoundingClientRect();
-  const input = document.createElement('input');
-  input.className = 'ann-text-input';
-  input.style.left  = (cRect.left - wRect.left + wrap.scrollLeft  + (pos.x * cRect.width  / canvas.width))  + 'px';
-  input.style.top   = (cRect.top  - wRect.top  + wrap.scrollTop   + (pos.y * cRect.height / canvas.height)) + 'px';
+  // Append to canvas container (position:relative) so absolute coords map directly to canvas display space
+  const cont   = document.getElementById('ann-canvas-container');
+  const cRect  = canvas.getBoundingClientRect();
+  const fontSize = Math.max(14, ann.size * 4);
+  // Convert canvas-space coords to display-space (CSS pixels relative to container top-left)
+  const dispX  = pos.x * (cRect.width  / canvas.width);
+  const dispY  = pos.y * (cRect.height / canvas.height);
+  const input  = document.createElement('input');
+  input.type   = 'text';
+  input.className   = 'ann-text-input';
+  input.style.left  = dispX + 'px';
+  input.style.top   = (dispY - fontSize * 0.9) + 'px'; // shift up so baseline aligns with click point
   input.style.color = ann.color;
-  input.style.fontSize = Math.max(14, ann.size * 4) + 'px';
-  wrap.appendChild(input);
-  input.focus();
+  input.style.fontSize = fontSize + 'px';
+  cont.appendChild(input);
+  // Delay focus slightly so mouseup on canvas doesn't steal it back
+  setTimeout(() => input.focus(), 20);
+  let committed = false;
   const commit = () => {
-    if (!input.value.trim()) { input.remove(); return; }
+    if (committed) return;
+    committed = true;
+    const val = input.value.trim();
+    input.remove();
+    if (!val) return;
     _annSaveUndo();
     const draw = document.getElementById('ann-draw');
     const ctx  = draw.getContext('2d');
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = ann.color;
-    ctx.font = `${Math.max(14, ann.size * 4)}px ${getComputedStyle(document.body).getPropertyValue('--font-mono')}`;
-    ctx.fillText(input.value, pos.x, pos.y);
-    input.remove();
+    ctx.font      = `${fontSize}px monospace`;
+    ctx.fillText(val, pos.x, pos.y);
   };
-  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') commit(); if (ev.key === 'Escape') input.remove(); });
-  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+    if (ev.key === 'Escape') { committed = true; input.remove(); }
+  });
+  // Small delay on blur to let Enter keydown fire first
+  input.addEventListener('blur', () => setTimeout(commit, 80));
 }
 
 function annUndo() {
