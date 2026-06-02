@@ -1,6 +1,6 @@
 # VD Online Browser
 
-A **browser-in-browser** web application — a single PHP+HTML project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, sessions, find in page, split view, PiP, edit mode, and more.
+A **browser-in-browser** web application — a single PHP+HTML project that embeds a fully-featured browsing experience inside an iframe, with an AI-powered sidebar, tab management, bookmarks, notes, history, sessions, find in page, split view, PiP, edit mode, screenshot+annotate, and more.
 
 Built with a dark-themed design system (Fraunces + DM Mono, CSS custom properties), no external JS frameworks.
 
@@ -70,11 +70,19 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 - Visual indicator: dashed yellow outline on the body in edit mode
 
 ### 🏗️ Page Rebuilder (AI) _(Fase 2)_
-- Text field in AI panel: describe the changes you want ("dark mode, remove ads, bigger font")
+- Text field in AI panel: describe the changes you want
 - Fetches current page HTML via proxy, sends to GPT-4o-mini with instructions
-- Returns complete rebuilt HTML (up to 4096 tokens output)
+- Returns complete rebuilt HTML
 - **Download** button saves the rebuilt page as `.html`
-- **Preview** button opens the rebuilt page in a new tab directly in the browser
+- **Preview** button opens the rebuilt page in a new tab
+
+### 📸 Screenshot + Annotate _(Fase 3)_
+- `Ctrl+Shift+S` or toolbar 📷 button captures the current page via html2canvas injected into the iframe
+- Opens full-screen annotation overlay with two-layer canvas (screenshot bg + draw layer)
+- **Tools**: ✏️ Pen (freehand), □ Rectangle, ↗ Arrow, T Text (inline input), ⌫ Eraser
+- Color picker + brush size slider
+- Undo stack (up to 30 steps, also `Ctrl+Z`)
+- **Download PNG** and **Copy to clipboard**
 
 ### 🤖 AI Assistant (GPT-4o-mini, requires OpenAI API key)
 All AI actions fetch **real page content** via `proxy.php` before sending to GPT.
@@ -91,7 +99,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 | Draft a tweet | 280-char tweet about the page |
 | Ask about this page | Free-form Q&A with page context |
 | Generate reader view | Clean article markdown in Reader Mode panel |
-| **Group tabs with AI** _(Fase 1)_ | Clusters all open tabs into labeled groups; groups saved as snapshots in `localStorage`, persistent across panel switches and page reloads |
+| **Group tabs with AI** _(Fase 1)_ | Clusters all open tabs into labeled groups; saved as localStorage snapshots |
 | **Page rebuilder** _(Fase 2)_ | Generates modified HTML based on description |
 
 ### 📋 Sessions _(Fase 1)_
@@ -102,15 +110,15 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 
 ### 🔍 Find in Page _(Fase 1)_
 - `Ctrl+F` to open the find bar
-- Real-time highlighting inside the iframe (injected into `srcdoc`)
-- Previous / Next navigation (also `Shift+Enter` / `Enter`)
-- Match counter (`current/total`)
-- `Esc` to close and clear highlights
+- Real-time highlighting inside the iframe
+- Previous / Next navigation
+- Match counter
+- `Esc` to close
 
 ### 🔖 Bookmarks
 - Add/delete bookmarks with title, URL, and tags
 - Quick-star toggle from the top bar
-- Full Bookmark Manager link (opens `vd-ai-bookman.html`)
+- Each bookmark has a ⎗ button to open directly in split pane
 - Persisted in `localStorage`
 
 ### 📝 Notes
@@ -137,11 +145,6 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - Export all data (JSON)
 - Clear all data
 
-### 🪟 Bookmark → Split Pane
-- Each bookmark has a second button (⎗) to open it directly in the right split pane
-- Auto-activates split mode if not already open
-- Main pane click behavior unchanged
-
 ### ⌨️ Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
@@ -153,6 +156,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 | `Ctrl+F` | Find in page |
 | `Ctrl+E` | Toggle edit mode |
 | `Ctrl+\` | Toggle split mode |
+| `Ctrl+Shift+S` | Screenshot + Annotate |
 | `Alt+←` | Back |
 | `Alt+→` | Forward |
 
@@ -171,10 +175,10 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] PiP tab (floating draggable mini-window, resizable)
 - [x] Edit mode (contentEditable + formatting toolbar + save HTML)
 - [x] Page rebuilder (AI generates HTML variant from description)
-- [x] Bug fix: `buildFetchUrl()` destructuring in `splitLoadFrame` and `rebuildPage` (was sending `[object Object]` as fetch URL)
+- [x] Bug fix: `buildFetchUrl()` destructuring in `splitLoadFrame` and `rebuildPage`
 
-### 📋 Fase 3 — Planned
-- [ ] Screenshot + annotate (html2canvas injection + draw tools)
+### ✅ Fase 3 — In progress
+- [x] Screenshot + annotate (📷 button / Ctrl+Shift+S; html2canvas iframe injection; draw/rect/arrow/text/eraser tools; undo, download PNG, copy to clipboard)
 - [ ] AI form filler (detect forms, GPT autofill via postMessage)
 - [ ] Password manager panel (per-domain credentials, autofill)
 - [ ] Page & asset download as ZIP (JSZip + proxy multi-fetch)
@@ -191,6 +195,7 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - **Major platforms** (Google, YouTube, Twitter/X, Facebook): actively block proxies server-side — use "Open in new tab" fallback
 - **Direct mode** (no proxy): virtually all modern sites block iframe embedding via `X-Frame-Options` / `Content-Security-Policy`
 - **Edit mode**: `document.execCommand` is deprecated but still functional in all current browsers; works best on proxy-loaded pages
+- **Screenshot**: html2canvas may not capture dynamically rendered content (canvas elements, WebGL, video frames)
 
 ---
 
