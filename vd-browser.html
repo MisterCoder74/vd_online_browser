@@ -1095,7 +1095,7 @@ async function _handleFormData(fields) {
   const t = getTab();
   const url = t?.url || window.location.href;
   const fieldDesc = fields.map(f =>
-    `Field ${f.idx}: label="${f.label||f.placeholder||f.name||'(unnamed)'" type="${f.type}" name="${f.name}"` +
+    `Field ${f.idx}: label="${f.label||f.placeholder||f.name||'(unnamed)'}" type="${f.type}" name="${f.name}"` +
     (f.options.length ? ` options=[${f.options.slice(0,8).join(', ')}]` : '')
   ).join('\n');
   const sysMsg = `You are an AI that suggests realistic form fill values. Given a page URL and its form fields, respond with a JSON array of objects {idx, value}. Only fill fields that make sense (skip passwords, CAPTCHAs, file uploads). Use realistic placeholder data. For select fields, choose from the provided options.`;
@@ -1176,10 +1176,40 @@ const ann = { tool:'pen', color:'#c8f060', size:3, drawing:false, sx:0, sy:0, un
 async function takeScreenshot() {
   const frame = document.getElementById('main-frame');
   if (!frame || frame.style.display === 'none') { toast('No page loaded', 'err'); return; }
-  toast('Capturing…', 'ok');
+
+  // ── Primary: Screen Capture API (pixel-perfect, captures everything) ──────────
+  if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+    try {
+      toast('Select the window/tab to capture…', 'ok');
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'window', width: { ideal: 3840 }, height: { ideal: 2160 } },
+        audio: false
+      });
+      const video  = document.createElement('video');
+      video.srcObject = stream;
+      await new Promise(r => { video.onloadedmetadata = r; });
+      video.play();
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const canvas = document.createElement('canvas');
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      stream.getTracks().forEach(t => t.stop());
+      openAnnotator(canvas.toDataURL('image/png'));
+      return;
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        // User denied — fall through to html2canvas fallback silently
+      } else {
+        toast('Screen capture failed: ' + e.message + ' — trying fallback…', 'err');
+      }
+    }
+  }
+
+  // ── Fallback: html2canvas composite (outer UI + iframe inner content) ─────────
+  toast('Capturing with fallback (may be approximate)…', 'ok');
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-  // Helper: inject html2canvas into any window/document if missing
   const loadH2C = async (win, doc) => {
     win = win || window; doc = doc || document;
     if (win.html2canvas) return win.html2canvas;
@@ -1192,21 +1222,23 @@ async function takeScreenshot() {
   };
 
   try {
-    // Step 1: capture iframe inner content (full documentElement)
     let iframeDataUrl = null;
     try {
       const iwin = frame.contentWindow;
       const idoc = frame.contentDocument;
       if (idoc && (idoc.body || idoc.documentElement)) {
-        const h2c = await loadH2C(iwin, idoc);
-        const c = await h2c(idoc.documentElement || idoc.body, {
-          useCORS: true, allowTaint: true, logging: false, scale: dpr
+        const root = idoc.documentElement || idoc.body;
+        const bg   = getComputedStyle(root).backgroundColor;
+        const h2c  = await loadH2C(iwin, idoc);
+        const c    = await h2c(root, {
+          useCORS: true, allowTaint: true, logging: false,
+          foreignObjectRendering: true, scale: dpr,
+          backgroundColor: (bg && bg !== 'rgba(0, 0, 0, 0)') ? bg : '#ffffff'
         });
         iframeDataUrl = c.toDataURL('image/png');
       }
     } catch (_) { /* inner capture failed, continue without */ }
 
-    // Step 2: capture full outer UI (topbar + panels), masking the iframe so it's blank
     const h2c = await loadH2C(window, document);
     const outerCanvas = await h2c(document.body, {
       useCORS: true, allowTaint: true, logging: false, scale: dpr,
@@ -1214,19 +1246,17 @@ async function takeScreenshot() {
     });
 
     if (!iframeDataUrl) {
-      // No iframe content available — just use outer UI
       openAnnotator(outerCanvas.toDataURL('image/png'));
       return;
     }
 
-    // Step 3: composite — draw outer UI, then overlay iframe content at correct position
-    const fRect = frame.getBoundingClientRect();
-    const scrollX = window.scrollX || window.pageXOffset || 0;
-    const scrollY = window.scrollY || window.pageYOffset || 0;
-    const final = document.createElement('canvas');
-    final.width  = outerCanvas.width;
-    final.height = outerCanvas.height;
-    const fCtx = final.getContext('2d');
+    const fRect  = frame.getBoundingClientRect();
+    const scrollX = window.scrollX || 0;
+    const scrollY = window.scrollY || 0;
+    const final   = document.createElement('canvas');
+    final.width   = outerCanvas.width;
+    final.height  = outerCanvas.height;
+    const fCtx    = final.getContext('2d');
     fCtx.drawImage(outerCanvas, 0, 0);
     const iframeImg = await new Promise(res => {
       const img = new Image(); img.onload = () => res(img); img.src = iframeDataUrl;
