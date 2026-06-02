@@ -1545,7 +1545,7 @@ async function rebuildPage() {
     const rawHtml = rMode === 'allorigins-json' ? ((await res.json()).contents || '') : await res.text();
     if (!rawHtml) throw new Error('Empty page response');
 
-    const gptPrompt = `You are a web page editor. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML with no markdown fences, no explanations.\n\nChanges: ${prompt}\n\nOriginal HTML (first 11000 chars):\n${rawHtml.slice(0, 11000)}`;
+    const gptPrompt = `You are a website restyler. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML making sure you cover all the elements included in the <body> block. ABSOLUTELY no markdown fences, no explanations, no placeholders like "content would go here" or "to do".\n\nChanges: ${prompt}\n\nOriginal HTML (first 11000 chars):\n${rawHtml.slice(0, 11000)}`;
     const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
