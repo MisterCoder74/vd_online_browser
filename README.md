@@ -73,8 +73,8 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 
 ### 🏗️ Page Rebuilder (AI) _(Fase 2)_
 - Text field in AI panel: describe the changes you want ("dark mode, remove ads, bigger font")
-- Fetches current page HTML via proxy, sends to GPT-4o-mini with instructions
-- Returns complete rebuilt HTML (up to 4096 tokens output)
+- Fetches current page HTML via proxy, sends to GPT-4.1-nano with instructions (11 000 chars context)
+- Returns complete rebuilt HTML (up to 28 000 tokens output)
 - **Download** button saves the rebuilt page as `.html`
 - **Preview** button opens the rebuilt page in a new tab directly in the browser
 
@@ -93,6 +93,22 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 - Editable fill panel — review and modify each value before injecting
 - Fill via native DOM events (compatible with React/Vue/Angular SPAs)
 - Works without API key (manual fill fallback)
+
+### 🔑 Password Manager _(Fase 3)_
+- 🔑 sidebar panel — save credentials per domain (username + password)
+- Search bar filters by domain or username
+- Show/hide password toggle; **Fill from tab** button auto-populates domain from current URL
+- **Copy username / Copy password** to clipboard
+- **Autofill** — injects credentials into the current iframe's login fields via DOM events (same-origin pages)
+- Credentials persisted in `localStorage` (`vdb-passwords`); included in the JSON data export
+
+### 📦 Page & Asset ZIP Download _(Fase 3)_
+- 📦 ZIP toolbar button (top bar, next to screenshot)
+- Fetches the current page HTML through the configured proxy
+- Discovers and downloads linked CSS, scripts, images, and favicons (up to 30 assets)
+- Rewrites asset paths to relative folder paths inside the archive (`css/`, `js/`, `img/`)
+- Generates a compressed `.zip` archive (DEFLATE level 6) named after the current tab title
+- Requires a proxy to be configured in Settings
 
 ### 🤖 AI Assistant (GPT-4o-mini, requires OpenAI API key)
 All AI actions fetch **real page content** via `proxy.php` before sending to GPT.
@@ -194,8 +210,8 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 ### ✅ Fase 3 — In progress
 - [x] Screenshot + annotate (📷 / Ctrl+Shift+S; Screen Capture API + html2canvas fallback; pen/rect/arrow/text/eraser/crop tools; undo, download PNG, copy clipboard)
 - [x] AI form filler (detect forms, GPT-4o-mini suggestions, manual edit, direct DOM injection)
-- [ ] Password manager panel (per-domain credentials, autofill)
-- [ ] Page & asset download as ZIP (JSZip + proxy multi-fetch)
+- [x] Password manager panel (🔑 sidebar panel; save/search credentials per domain, copy user/pass, one-click autofill via DOM injection)
+- [x] Page & asset download as ZIP (📦 ZIP toolbar button; JSZip + proxy fetches CSS/JS/images; up to 30 assets bundled)
 
 ### 🔐 Fase 4 — Last
 - [ ] User registration & login system (PHP + bcrypt)
