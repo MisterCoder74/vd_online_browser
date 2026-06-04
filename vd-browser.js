@@ -7,15 +7,16 @@ let cfg = {};
 let bookmarks = [];
 let history_  = [];   // renamed to avoid collision with window.history
 let notes = {};
+let passwords = [];
 
 // ── BOOT ──────────────────────────────────────
 function boot() {
-  loadCfg(); loadBM(); loadHist(); loadNotes(); loadSessions();
+  loadCfg(); loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
   newTab();
   // Restore last active page (persists across navigation away and back)
   const lastUrl = localStorage.getItem('vdb-last-url');
   if (lastUrl && lastUrl !== 'about:home') loadUrl(lastUrl);
-  renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups();
+  renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups(); renderPwdPanel();
   updateAiStatus(); updateProxyStatus();
   setInterval(() => { document.getElementById('sb-time').textContent = new Date().toLocaleTimeString(); }, 1000);
   document.addEventListener('keydown', globalKey);
@@ -227,6 +228,115 @@ function switchPanel(name) {
   document.querySelectorAll('.s-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('panel-' + name)?.classList.add('active');
   document.querySelector(`.s-tab[data-p="${name}"]`)?.classList.add('active');
+}
+
+
+// ── PASSWORD MANAGER ──────────────────────────
+function loadPwds() {
+  try { passwords = JSON.parse(localStorage.getItem('vdb-passwords') || '[]'); } catch { passwords = []; }
+}
+function savePwds() {
+  localStorage.setItem('vdb-passwords', JSON.stringify(passwords));
+  const el = document.getElementById('pwd-cnt');
+  if (el) el.textContent = passwords.length;
+}
+function renderPwdPanel() {
+  const q    = (document.getElementById('pwd-search')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('pwd-list');
+  if (!list) return;
+  const el = document.getElementById('pwd-cnt');
+  if (el) el.textContent = passwords.length;
+  const filtered = passwords.filter(p =>
+    p.domain.toLowerCase().includes(q) || p.username.toLowerCase().includes(q));
+  if (!filtered.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:11px;text-align:center;padding:16px 0;">' +
+      (passwords.length ? 'No match' : 'No credentials saved yet') + '</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(p => `
+    <div class="pwd-item">
+      <div class="pwd-item-head">
+        <div>
+          <div class="pwd-domain">${esc(p.domain)}</div>
+          <div class="pwd-user">${esc(p.username)}</div>
+        </div>
+        <button class="act-btn danger" onclick="deletePwd('${p.id}')"
+                style="width:auto;padding:3px 7px;font-size:11px;margin:0;" title="Delete">✕</button>
+      </div>
+      <div class="pwd-btns">
+        <button class="act-btn" onclick="copyPwd('${p.id}','u')">👤 Copy user</button>
+        <button class="act-btn" onclick="copyPwd('${p.id}','p')">🔑 Copy pass</button>
+        <button class="act-btn primary" onclick="autofillPwd('${p.id}')">↩ Autofill</button>
+      </div>
+    </div>`).join('');
+}
+function addPwd() {
+  const domain   = document.getElementById('pwd-domain').value.trim();
+  const username = document.getElementById('pwd-user').value.trim();
+  const password = document.getElementById('pwd-pass').value;
+  if (!domain || !username || !password) { toast('Fill all three fields', 'err'); return; }
+  passwords.unshift({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+    domain, username, password, created: new Date().toISOString()
+  });
+  savePwds(); renderPwdPanel();
+  document.getElementById('pwd-domain').value = '';
+  document.getElementById('pwd-user').value   = '';
+  document.getElementById('pwd-pass').value   = '';
+  toast('Credential saved', 'ok');
+}
+function deletePwd(id) {
+  passwords = passwords.filter(p => p.id !== id);
+  savePwds(); renderPwdPanel();
+  toast('Deleted', 'ok');
+}
+function copyPwd(id, field) {
+  const p = passwords.find(p => p.id === id);
+  if (!p) return;
+  navigator.clipboard.writeText(field === 'u' ? p.username : p.password)
+    .then(() => toast(field === 'u' ? 'Username copied' : 'Password copied', 'ok'))
+    .catch(() => toast('Copy failed', 'err'));
+}
+function autofillPwd(id) {
+  const cred = passwords.find(p => p.id === id);
+  if (!cred) return;
+  try {
+    const fr  = document.getElementById('main-frame');
+    const doc = fr.contentDocument;
+    if (!doc) { toast('Cannot access page (cross-origin)', 'err'); return; }
+    const userField = doc.querySelector(
+      'input[type="email"],input[name*="user" i],input[name*="email" i],' +
+      'input[id*="user" i],input[id*="email" i],' +
+      'input[autocomplete="username"],input[autocomplete="email"]'
+    );
+    const passField = doc.querySelector('input[type="password"]');
+    let filled = 0;
+    if (userField) {
+      userField.focus(); userField.value = cred.username;
+      userField.dispatchEvent(new Event('input',  { bubbles: true }));
+      userField.dispatchEvent(new Event('change', { bubbles: true }));
+      filled++;
+    }
+    if (passField) {
+      passField.focus(); passField.value = cred.password;
+      passField.dispatchEvent(new Event('input',  { bubbles: true }));
+      passField.dispatchEvent(new Event('change', { bubbles: true }));
+      filled++;
+    }
+    if (!filled) { toast('No login fields found', 'err'); return; }
+    toast('Autofilled!', 'ok');
+  } catch(e) { toast('Autofill error (cross-origin?): ' + e.message, 'err'); }
+}
+function togglePwdVis() {
+  const f = document.getElementById('pwd-pass');
+  const b = document.getElementById('pwd-eye');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  b.innerHTML = f.type === 'password' ? '&#128065;' : '&#128584;';
+}
+function fillDomainFromTab() {
+  const url = getTab()?.url;
+  if (!url || url === 'about:home') return;
+  try { document.getElementById('pwd-domain').value = new URL(url).hostname.replace(/^www\./, ''); } catch {}
 }
 
 // ── BOOKMARKS ─────────────────────────────────
@@ -1021,7 +1131,7 @@ function togSetting(k) {
 }
 
 function exportData() {
-  const data = { bookmarks, history: history_, notes, cfg: { engine: cfg.engine, home: cfg.home } };
+  const data = { bookmarks, history: history_, notes, passwords, cfg: { engine: cfg.engine, home: cfg.home } };
   const b = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(b);
   a.download = 'vdbrowser-data.json'; a.click();
@@ -1032,7 +1142,92 @@ function clearAllData() {
   if (!confirm('Clear ALL data (bookmarks, history, notes, settings)?')) return;
   localStorage.removeItem('vdb-bm'); localStorage.removeItem('vdb-hist');
   localStorage.removeItem('vdb-notes'); localStorage.removeItem('vdb-cfg');
+  localStorage.removeItem('vdb-passwords');
   location.reload();
+}
+
+
+// ── PAGE ZIP DOWNLOAD ─────────────────────────
+async function downloadPageZip() {
+  const url = getTab()?.url;
+  if (!url || url === 'about:home') { toast('Navigate to a page first', 'err'); return; }
+  const { fetchUrl, mode: fMode } = buildFetchUrl(url);
+  if (!fetchUrl || fMode === 'direct') { toast('Enable a proxy in Settings first', 'err'); return; }
+  if (typeof JSZip === 'undefined') { toast('JSZip not loaded', 'err'); return; }
+  const btn = document.getElementById('btn-zip');
+  if (btn) { btn.disabled = true; }
+  toast('Fetching page…', 'ok');
+  try {
+    const res = await fetch(fetchUrl);
+    if (!res.ok) throw new Error('Proxy error ' + res.status);
+    const rawHtml = fMode === 'allorigins-json' ? ((await res.json()).contents || '') : await res.text();
+    if (!rawHtml) throw new Error('Empty response');
+
+    const zip    = new JSZip();
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(rawHtml, 'text/html');
+    const base   = new URL(url);
+    const fetched = new Map();
+    let   assetIdx = 0;
+    const MAX_ASSETS = 30;
+
+    async function fetchAsset(attr, folder) {
+      if (!attr) return null;
+      let absUrl;
+      try { absUrl = new URL(attr, base).href; } catch { return null; }
+      if (fetched.has(absUrl)) return fetched.get(absUrl);
+      if (fetched.size >= MAX_ASSETS) return null;
+      try {
+        const { fetchUrl: af, mode: am } = buildFetchUrl(absUrl);
+        if (am === 'direct') return null;
+        const r = await fetch(af);
+        if (!r.ok) return null;
+        const blob = am === 'allorigins-json'
+          ? new Blob([(await r.json()).contents || ''])
+          : await r.blob();
+        const rawExt = absUrl.split('?')[0].split('.').pop().toLowerCase().slice(0, 5);
+        const ext    = /^[a-z0-9]+$/.test(rawExt) ? rawExt : 'bin';
+        assetIdx++;
+        const zipPath = folder + '/' + assetIdx + '.' + ext;
+        zip.file(zipPath, blob);
+        fetched.set(absUrl, zipPath);
+        return zipPath;
+      } catch { return null; }
+    }
+
+    for (const el of doc.querySelectorAll('link[rel="stylesheet"][href]')) {
+      const p = await fetchAsset(el.getAttribute('href'), 'css');
+      if (p) el.setAttribute('href', p);
+    }
+    for (const el of doc.querySelectorAll('script[src]')) {
+      const p = await fetchAsset(el.getAttribute('src'), 'js');
+      if (p) el.setAttribute('src', p);
+    }
+    for (const el of doc.querySelectorAll('img[src]')) {
+      const p = await fetchAsset(el.getAttribute('src'), 'img');
+      if (p) el.setAttribute('src', p);
+    }
+    for (const el of doc.querySelectorAll('link[rel*="icon"][href]')) {
+      const p = await fetchAsset(el.getAttribute('href'), 'img');
+      if (p) el.setAttribute('href', p);
+    }
+
+    zip.file('index.html', '<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+    toast('Packing ZIP…', 'ok');
+    const blob = await zip.generateAsync({
+      type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }
+    });
+    const pageName = (getTab()?.title || 'page')
+      .replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-|-$/g, '') || 'page';
+    Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob), download: pageName + '.zip'
+    }).click();
+    toast('ZIP downloaded! (' + fetched.size + ' assets bundled)', 'ok');
+  } catch(e) {
+    toast('ZIP error: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; }
+  }
 }
 
 // ── KEYBOARD ──────────────────────────────────
