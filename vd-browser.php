@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vd-browser.css?v=<?php echo time(); ?>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -28,6 +29,7 @@
   </div>
   <div class="topbar-sep"></div>
   <button class="nav-btn" title="Screenshot + Annotate (Ctrl+Shift+S)" onclick="takeScreenshot()">&#128247;</button>
+  <button class="nav-btn" id="btn-zip" title="Download page + assets as ZIP" onclick="downloadPageZip()">&#128230; ZIP</button>
   <button class="nav-btn" title="Copy URL"                  onclick="copyUrl()">&#128279;</button>
   <button class="nav-btn" title="Open in new tab"           onclick="openInNewTab()">&#8599;</button>
   <div class="topbar-sep"></div>
@@ -56,6 +58,7 @@
       <div class="s-tab"        data-p="reader"    onclick="switchPanel('reader')"    title="Reader Mode">&#128218;</div>
       <div class="s-tab"        data-p="settings"  onclick="switchPanel('settings')"  title="Settings">&#9881;</div>
       <div class="s-tab"        data-p="sessions"  onclick="switchPanel('sessions')"  title="Sessions">&#128203;</div>
+      <div class="s-tab"        data-p="passwords" onclick="switchPanel('passwords')" title="Password Manager">&#128273;</div>
     </div>
 
     <!-- BOOKMARKS -->
@@ -219,6 +222,31 @@
         </div>
         <div class="sec-lbl" style="margin-top:12px;">Saved sessions</div>
         <div id="sess-list"></div>
+      </div>
+    </div>
+
+    <!-- PASSWORDS -->
+    <div class="s-panel" id="panel-passwords">
+      <div class="p-head">&#128273; Passwords <span class="cnt" id="pwd-cnt">0</span></div>
+      <div class="p-body">
+        <input class="mini-input" type="text" id="pwd-search" placeholder="Search site or username&#8230;"
+               oninput="renderPwdPanel()">
+        <div class="sec-lbl" style="margin-top:10px;">Add credential</div>
+        <input class="mini-input" type="text" id="pwd-domain" placeholder="Domain (e.g. github.com)">
+        <input class="mini-input" type="text" id="pwd-user"   placeholder="Username / email">
+        <div style="display:flex;gap:4px;align-items:center;">
+          <input class="mini-input" type="password" id="pwd-pass" placeholder="Password"
+                 style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')addPwd()">
+          <button class="act-btn" id="pwd-eye" onclick="togglePwdVis()"
+                  style="width:auto;padding:6px 8px;margin-bottom:0;" title="Show/hide">&#128065;</button>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:5px;">
+          <button class="act-btn primary" style="flex:1;" onclick="addPwd()">&#43; Save</button>
+          <button class="act-btn" style="flex:0 0 auto;padding:6px 10px;" onclick="fillDomainFromTab()"
+                  title="Fill domain from current tab">&#128279;</button>
+        </div>
+        <div class="sec-lbl" style="margin-top:12px;">Saved credentials</div>
+        <div id="pwd-list"></div>
       </div>
     </div>
   </div><!-- /sidebar -->
