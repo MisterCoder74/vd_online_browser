@@ -241,3 +241,83 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .pwd-btns { display:flex; gap:3px; margin-top:6px; flex-wrap:wrap; }
 .pwd-btns .act-btn { width:auto; padding:3px 7px; font-size:11px; margin-bottom:0; }
 #btn-zip { font-size:11px; }
+
+/* ── AUTH OVERLAY ──────────────────────────────────────────────── */
+#auth-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(10,12,16,.96);
+  display: none;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+}
+#auth-overlay.visible { display: flex; }
+.auth-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 32px 28px 24px;
+  width: 300px;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
+}
+.auth-logo {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 700;
+  color: var(--text1);
+  text-align: center; margin-bottom: 6px;
+}
+.auth-logo em { color: var(--accent); font-style: normal; }
+.auth-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text1); font-family: var(--font-mono); font-size: 12px;
+  padding: 8px 10px; outline: none;
+}
+.auth-input:focus { border-color: var(--accent); }
+.auth-btn {
+  width: 100%;
+  background: var(--accent); color: var(--bg1);
+  border: none; border-radius: var(--r);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  padding: 9px; cursor: pointer; transition: opacity .15s;
+}
+.auth-btn:hover { opacity: .85; }
+.auth-switch { text-align: center; font-size: 11px; color: var(--text3); }
+.auth-switch a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.auth-err { color: #ff6b6b; font-size: 11px; text-align: center; min-height: 16px; }
+.auth-guest-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  width: 100%; padding: 7px;
+  border-radius: var(--r);
+  font-family: var(--font-mono); font-size: 11px;
+  cursor: pointer;
+}
+.auth-guest-btn:hover { border-color: var(--accent); color: var(--text2); }
+
+/* ── USER BADGE (topbar) ───────────────────────────────────────── */
+.auth-badge {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 3px 8px; margin-left: 4px;
+}
+.auth-badge button {
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1;
+}
+.auth-badge button:hover { color: var(--accent); }
+.auth-login-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text3); font-family: var(--font-mono); font-size: 11px;
+  padding: 3px 8px; cursor: pointer; margin-left: 4px;
+}
+.auth-login-btn:hover { border-color: var(--accent); color: var(--accent); }
