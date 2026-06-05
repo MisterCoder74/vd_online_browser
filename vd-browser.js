@@ -16,11 +16,12 @@ async function boot() {
   loadCfg();
   await authCheckSession();
   if (currentUser) {
-    const loaded = await pullState();
+    clearDataCache();                  // wipe any stale data from previous user/session
+    const loaded = await pullState();  // load from server → also writes back to localStorage
     if (!loaded) {
-      // First login ever — seed server from localStorage
-      loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
-      scheduleSync();
+      // Fresh account with no server data yet — start truly empty, do NOT seed
+      // from localStorage (would contaminate with data from other accounts)
+      persistToLocalStorage();         // persist the empty state to localStorage
     }
     applyCfgUI();
   } else {
@@ -1919,8 +1920,9 @@ async function authLogin() {
       currentUser = j.user;
       localStorage.removeItem('vdb-guest');
       hideAuthOverlay(); updateAuthUI();
-      const loaded = await pullState();
-      if (!loaded) scheduleSync();
+      clearDataCache();                    // clear previous user's data before loading this user's
+      const loaded = await pullState();    // server → memory + localStorage
+      if (!loaded) persistToLocalStorage(); // fresh account: persist empty state
       applyCfgUI();
       renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups(); renderPwdPanel();
       toast('Welcome back, ' + j.user.username + '!', 'ok');
@@ -1943,8 +1945,10 @@ async function authRegister() {
     if (j.ok) {
       currentUser = j.user;
       localStorage.removeItem('vdb-guest');
+      clearDataCache();                    // new account starts with clean slate
       hideAuthOverlay(); updateAuthUI();
-      scheduleSync();
+      persistToLocalStorage();             // write empty state to localStorage
+      renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups(); renderPwdPanel();
       toast('Account created! Welcome, ' + j.user.username + '!', 'ok');
     } else { errEl.textContent = j.error || 'Registration failed'; }
   } catch { errEl.textContent = 'Network error'; }
@@ -1953,12 +1957,30 @@ async function authRegister() {
 async function authLogout() {
   try { await fetch('auth.php?action=logout', { method: 'POST' }); } catch {}
   currentUser = null;
+  clearDataCache();   // wipe in-memory state + localStorage so next user starts clean
   updateAuthUI();
   toast('Logged out', 'ok');
   showAuthOverlay();
 }
 
 // ── SERVER SYNC ─────────────────────────────────────────────────
+
+/** Reset in-memory state and clear all data localStorage keys.
+ *  Called on login, register, and logout to prevent cross-account contamination. */
+function clearDataCache() {
+  bookmarks = []; history_ = []; notes = {}; passwords = []; sessions = {};
+  ['vdb-bm','vdb-hist','vdb-notes','vdb-passwords','vdb-sessions',
+   'vdb-tab-groups','vdb-last-url'].forEach(k => localStorage.removeItem(k));
+}
+
+/** Persist current in-memory state to localStorage (offline/guest cache). */
+function persistToLocalStorage() {
+  localStorage.setItem('vdb-bm',        JSON.stringify(bookmarks));
+  localStorage.setItem('vdb-hist',      JSON.stringify(history_));
+  localStorage.setItem('vdb-notes',     JSON.stringify(notes));
+  localStorage.setItem('vdb-passwords', JSON.stringify(passwords));
+  localStorage.setItem('vdb-sessions',  JSON.stringify(sessions));
+}
 
 function scheduleSync() {
   if (!currentUser) return;
@@ -2013,6 +2035,7 @@ async function pullState() {
       cfg.key = savedKey;
       localStorage.setItem('vdb-cfg', JSON.stringify(cfg));
     }
+    persistToLocalStorage();  // write server data back to localStorage (offline cache)
     return true;
   } catch { return false; }
 }
