@@ -14,6 +14,14 @@
 <!-- ════════════════ TOP BAR ════════════════ -->
 <div class="topbar">
   <span class="brand">VD<em>Browser</em></span>
+  <!-- auth badge (shown when logged in) -->
+  <div id="auth-user-badge" class="auth-badge" style="display:none;">
+    <span>&#128100;</span>
+    <span id="auth-user-name">–</span>
+    <button onclick="authLogout()" title="Logout">&#8617;</button>
+  </div>
+  <!-- login button (shown when guest) -->
+  <button id="auth-login-btn" class="auth-login-btn" onclick="showAuthOverlay()" title="Login / Register" style="display:none;">&#128100; Login</button>
   <div class="topbar-sep"></div>
   <button class="nav-btn" id="btn-back"    title="Back (Alt+←)"    onclick="goBack()"    disabled>&#8592;</button>
   <button class="nav-btn" id="btn-fwd"     title="Forward (Alt+→)" onclick="goForward()" disabled>&#8594;</button>
@@ -166,7 +174,15 @@
     <div class="s-panel" id="panel-settings">
       <div class="p-head">&#9881; Settings</div>
       <div class="p-body">
-        <div class="sec-lbl">OpenAI API Key</div>
+        <!-- Account section -->
+        <div class="sec-lbl" style="margin-bottom:6px;">&#128100; Account</div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:6px;font-size:11px;">
+          <div style="color:var(--text2);margin-bottom:2px;"><strong id="acc-username" style="color:var(--text1);">Guest</strong></div>
+          <div style="color:var(--text3);" id="acc-email">—</div>
+        </div>
+        <button class="act-btn" id="acc-btn-login"  onclick="showAuthOverlay()" style="margin-bottom:4px;">&#128100; Login / Register</button>
+        <button class="act-btn" id="acc-btn-logout" onclick="authLogout()"      style="display:none;margin-bottom:4px;">&#8617; Logout</button>
+        <div class="sec-lbl" style="margin-top:10px;">OpenAI API Key</div>
         <input class="mini-input" type="password" id="cfg-key" placeholder="sk-…" oninput="saveSettings()">
         <div class="sec-lbl">CORS Proxy</div>
         <select class="set-select" id="cfg-proxy-preset" onchange="applyProxyPreset(this.value)" style="margin-bottom:5px;">
@@ -426,6 +442,33 @@
         ontouchend="annMouseUp(event)">
       </canvas>
     </div>
+  </div>
+</div>
+
+<!-- ════ AUTH OVERLAY ════ -->
+<div id="auth-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,12,16,.96);display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);">
+  <div class="auth-card">
+    <div class="auth-logo">VD<em>Browser</em></div>
+
+    <!-- Login form -->
+    <div id="auth-form-login">
+      <input class="auth-input" type="email"    id="auth-email"    placeholder="Email"    style="margin-bottom:8px;" onkeydown="if(event.key==='Enter')authLogin()">
+      <input class="auth-input" type="password" id="auth-password" placeholder="Password" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')authLogin()">
+      <button class="auth-btn" onclick="authLogin()">Login</button>
+      <div class="auth-switch" style="margin-top:10px;">No account? <a onclick="authToggleForm('register')">Register</a></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="auth-form-register" style="display:none;">
+      <input class="auth-input" type="text"     id="auth-reg-username" placeholder="Username"          style="margin-bottom:8px;"  onkeydown="if(event.key==='Enter')authRegister()">
+      <input class="auth-input" type="email"    id="auth-reg-email"    placeholder="Email"             style="margin-bottom:8px;"  onkeydown="if(event.key==='Enter')authRegister()">
+      <input class="auth-input" type="password" id="auth-reg-password" placeholder="Password (min 6)"  style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')authRegister()">
+      <button class="auth-btn" onclick="authRegister()">Create account</button>
+      <div class="auth-switch" style="margin-top:10px;">Have account? <a onclick="authToggleForm('login')">Login</a></div>
+    </div>
+
+    <div id="auth-err" class="auth-err"></div>
+    <button class="auth-guest-btn" onclick="authGuest()">Continue as guest &nbsp;&#183;&nbsp; no sync</button>
   </div>
 </div>
 
