@@ -213,10 +213,17 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] Password manager panel (🔑 sidebar panel; save/search credentials per domain, copy user/pass, one-click autofill via DOM injection)
 - [x] Page & asset download as ZIP (📦 ZIP toolbar button; JSZip + proxy fetches CSS/JS/images; up to 30 assets bundled)
 
-### 🔐 Fase 4 — Last
-- [ ] User registration & login system (PHP + bcrypt)
-- [ ] Migrate all `localStorage` data to per-user JSON files on the server (`users/{id}/bookmarks.json`, `history.json`, `notes.json`, `settings.json`, `sessions.json`, `tab-groups.json`); `localStorage` kept as offline/guest fallback
-- [ ] _(optional)_ **External URL injection / chatbot bridge** — allow an external chatbot to send a URL and trigger browser actions (AI summary, screenshot, etc.) via URL params, BroadcastChannel, postMessage, or SSE/WebSocket bridge
+### 🔐 Fase 4 — Authentication & Data Persistence ✅
+- [x] User registration & login (PHP + bcrypt, `$_SESSION`)
+- [x] `auth.php` — register / login / logout / session-check endpoints; users stored in `data/users.json`
+- [x] `data.php` — GET / POST / DELETE per-user `state.json`; API key stripped server-side
+- [x] `data/.gitignore` — user JSON files never committed
+- [x] All localStorage keys synced to server on every mutation (debounced 700ms); localStorage kept as guest/offline fallback
+- [x] Auth overlay (login + register forms + "Continue as guest" button)
+- [x] User badge in topbar + login/logout buttons in Settings panel
+- [x] On first login: existing localStorage data seeded to server
+- [x] `cfg.key` (OpenAI API key) stays client-side only — never written to server
+- [ ] _(optional, Phase 5)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md`
 
 ---
 
