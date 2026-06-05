@@ -1,0 +1,2 @@
+# Ignore user data files — never commit credentials or personal data
+*.json
