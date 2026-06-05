@@ -8,10 +8,24 @@ let bookmarks = [];
 let history_  = [];   // renamed to avoid collision with window.history
 let notes = {};
 let passwords = [];
+let currentUser = null;  // { id, username, email } — null = guest mode
+let _syncTimer  = null;
 
 // ── BOOT ──────────────────────────────────────
-function boot() {
-  loadCfg(); loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
+async function boot() {
+  loadCfg();
+  await authCheckSession();
+  if (currentUser) {
+    const loaded = await pullState();
+    if (!loaded) {
+      // First login ever — seed server from localStorage
+      loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
+      scheduleSync();
+    }
+    applyCfgUI();
+  } else {
+    loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
+  }
   newTab();
   // Restore last active page (persists across navigation away and back)
   const lastUrl = localStorage.getItem('vdb-last-url');
@@ -21,6 +35,7 @@ function boot() {
   setInterval(() => { document.getElementById('sb-time').textContent = new Date().toLocaleTimeString(); }, 1000);
   document.addEventListener('keydown', globalKey);
   document.getElementById('url-input').addEventListener('focus', e => e.target.select());
+  if (!currentUser && !localStorage.getItem('vdb-guest')) showAuthOverlay();
 }
 
 // ── TABS ──────────────────────────────────────
@@ -239,6 +254,7 @@ function savePwds() {
   localStorage.setItem('vdb-passwords', JSON.stringify(passwords));
   const el = document.getElementById('pwd-cnt');
   if (el) el.textContent = passwords.length;
+  scheduleSync();
 }
 function renderPwdPanel() {
   const q    = (document.getElementById('pwd-search')?.value || '').trim().toLowerCase();
@@ -341,7 +357,7 @@ function fillDomainFromTab() {
 
 // ── BOOKMARKS ─────────────────────────────────
 function loadBM()  { bookmarks = JSON.parse(localStorage.getItem('vdb-bm') || '[]'); }
-function saveBM()  { localStorage.setItem('vdb-bm', JSON.stringify(bookmarks)); }
+function saveBM()  { localStorage.setItem('vdb-bm', JSON.stringify(bookmarks)); scheduleSync(); }
 
 function addBookmark() {
   const title = document.getElementById('bm-title').value.trim() || 'Untitled';
@@ -400,7 +416,7 @@ function quickBookmark() {
 
 // ── HISTORY ───────────────────────────────────
 function loadHist() { history_ = JSON.parse(localStorage.getItem('vdb-hist') || '[]'); }
-function saveHist() { localStorage.setItem('vdb-hist', JSON.stringify(history_.slice(0, 500))); }
+function saveHist() { localStorage.setItem('vdb-hist', JSON.stringify(history_.slice(0, 500))); scheduleSync(); }
 
 function addHist(url) {
   if (!cfg.hist) return;
@@ -433,6 +449,7 @@ function saveNote()  {
   const v = document.getElementById('notes-area').value;
   if (v) notes[u] = v; else delete notes[u];
   localStorage.setItem('vdb-notes', JSON.stringify(notes));
+  scheduleSync();
   renderNotes();
 }
 function loadNoteFor(url) {
@@ -1122,12 +1139,14 @@ function saveSettings() {
   if (cfg.proxyPreset === 'custom') cfg.proxy = document.getElementById('cfg-proxy').value.trim();
   localStorage.setItem('vdb-cfg', JSON.stringify(cfg));
   updateAiStatus(); updateProxyStatus();
+  scheduleSync();
 }
 
 function togSetting(k) {
   cfg[k] = !cfg[k];
   document.getElementById('tog-' + k).classList.toggle('on', cfg[k]);
   localStorage.setItem('vdb-cfg', JSON.stringify(cfg));
+  scheduleSync();
 }
 
 function exportData() {
@@ -1143,6 +1162,7 @@ function clearAllData() {
   localStorage.removeItem('vdb-bm'); localStorage.removeItem('vdb-hist');
   localStorage.removeItem('vdb-notes'); localStorage.removeItem('vdb-cfg');
   localStorage.removeItem('vdb-passwords');
+  if (currentUser) fetch('data.php', { method: 'DELETE' }).catch(() => {});
   location.reload();
 }
 
@@ -1256,6 +1276,7 @@ function loadSessions() {
 }
 function _saveSessions() {
   localStorage.setItem('vdb-sessions', JSON.stringify(sessions));
+  scheduleSync();
 }
 
 function saveSession() {
@@ -1353,6 +1374,7 @@ async function aiGroupTabs() {
       }).filter(Boolean)
     }));
     localStorage.setItem('vdb-tab-groups', JSON.stringify({ savedAt: new Date().toISOString(), groups: snapshot }));
+    scheduleSync();
     renderTabGroups();
 
     out.className = 'ai-out';
@@ -1824,3 +1846,185 @@ function toast(msg, type = 'ok') {
 
 // ── START ─────────────────────────────────────
 boot();
+
+
+// ── AUTH & SERVER SYNC ─────────────────────────────────────────
+
+async function authCheckSession() {
+  try {
+    const r = await fetch('auth.php?action=me');
+    const j = await r.json();
+    if (j.ok && j.user) { currentUser = j.user; updateAuthUI(); }
+  } catch { /* offline or no PHP backend — guest mode */ }
+}
+
+function updateAuthUI() {
+  const badge    = document.getElementById('auth-user-badge');
+  const loginBtn = document.getElementById('auth-login-btn');
+  if (currentUser) {
+    document.getElementById('auth-user-name').textContent = currentUser.username;
+    if (badge)    badge.style.display    = 'flex';
+    if (loginBtn) loginBtn.style.display = 'none';
+    const an = document.getElementById('acc-username');
+    const ae = document.getElementById('acc-email');
+    if (an) an.textContent = currentUser.username;
+    if (ae) ae.textContent = currentUser.email;
+    const bl = document.getElementById('acc-btn-login');
+    const bo = document.getElementById('acc-btn-logout');
+    if (bl) bl.style.display = 'none';
+    if (bo) bo.style.display = '';
+  } else {
+    if (badge)    badge.style.display    = 'none';
+    if (loginBtn) loginBtn.style.display = '';
+    const an = document.getElementById('acc-username');
+    const ae = document.getElementById('acc-email');
+    if (an) an.textContent = 'Guest';
+    if (ae) ae.textContent = '—';
+    const bl = document.getElementById('acc-btn-login');
+    const bo = document.getElementById('acc-btn-logout');
+    if (bl) bl.style.display = '';
+    if (bo) bo.style.display = 'none';
+  }
+}
+
+function showAuthOverlay() {
+  document.getElementById('auth-overlay').style.display = 'flex';
+  document.getElementById('auth-err').textContent = '';
+}
+function hideAuthOverlay() {
+  document.getElementById('auth-overlay').style.display = 'none';
+}
+function authToggleForm(form) {
+  document.getElementById('auth-form-login').style.display    = form === 'login'    ? '' : 'none';
+  document.getElementById('auth-form-register').style.display = form === 'register' ? '' : 'none';
+  document.getElementById('auth-err').textContent = '';
+}
+function authGuest() {
+  localStorage.setItem('vdb-guest', '1');
+  hideAuthOverlay();
+}
+
+async function authLogin() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl    = document.getElementById('auth-err');
+  if (!email || !password) { errEl.textContent = 'Email and password required'; return; }
+  try {
+    const r = await fetch('auth.php?action=login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      currentUser = j.user;
+      localStorage.removeItem('vdb-guest');
+      hideAuthOverlay(); updateAuthUI();
+      const loaded = await pullState();
+      if (!loaded) scheduleSync();
+      applyCfgUI();
+      renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups(); renderPwdPanel();
+      toast('Welcome back, ' + j.user.username + '!', 'ok');
+    } else { errEl.textContent = j.error || 'Login failed'; }
+  } catch { errEl.textContent = 'Network error'; }
+}
+
+async function authRegister() {
+  const username = document.getElementById('auth-reg-username').value.trim();
+  const email    = document.getElementById('auth-reg-email').value.trim();
+  const password = document.getElementById('auth-reg-password').value;
+  const errEl    = document.getElementById('auth-err');
+  if (!username || !email || !password) { errEl.textContent = 'All fields required'; return; }
+  try {
+    const r = await fetch('auth.php?action=register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      currentUser = j.user;
+      localStorage.removeItem('vdb-guest');
+      hideAuthOverlay(); updateAuthUI();
+      scheduleSync();
+      toast('Account created! Welcome, ' + j.user.username + '!', 'ok');
+    } else { errEl.textContent = j.error || 'Registration failed'; }
+  } catch { errEl.textContent = 'Network error'; }
+}
+
+async function authLogout() {
+  try { await fetch('auth.php?action=logout', { method: 'POST' }); } catch {}
+  currentUser = null;
+  updateAuthUI();
+  toast('Logged out', 'ok');
+  showAuthOverlay();
+}
+
+// ── SERVER SYNC ─────────────────────────────────────────────────
+
+function scheduleSync() {
+  if (!currentUser) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(pushState, 700);
+}
+
+async function pushState() {
+  if (!currentUser) return;
+  const tgRaw     = localStorage.getItem('vdb-tab-groups');
+  const tabGroups = tgRaw ? (() => { try { return JSON.parse(tgRaw); } catch { return null; } })() : null;
+  const state = {
+    bookmarks,
+    history:   history_,
+    notes,
+    passwords,
+    sessions,
+    tabGroups,
+    lastUrl:   localStorage.getItem('vdb-last-url'),
+    cfg: {
+      engine: cfg.engine, home: cfg.home, hist: cfg.hist,
+      autoext: cfg.autoext, proxyPreset: cfg.proxyPreset, proxy: cfg.proxy
+      // cfg.key intentionally excluded — stays client-side only
+    }
+  };
+  try {
+    await fetch('data.php', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(state)
+    });
+  } catch { /* silent — will retry on next mutation */ }
+}
+
+async function pullState() {
+  try {
+    const r = await fetch('data.php');
+    if (!r.ok) return false;
+    const j = await r.json();
+    if (!j.ok || !j.data) return false;
+    const d = j.data;
+    if (Array.isArray(d.bookmarks))                    bookmarks = d.bookmarks;
+    if (Array.isArray(d.history))                      history_  = d.history;
+    if (d.notes !== undefined)                         notes     = d.notes;
+    if (Array.isArray(d.passwords))                    passwords = d.passwords;
+    if (d.sessions && typeof d.sessions === 'object')  sessions  = d.sessions;
+    if (d.tabGroups) localStorage.setItem('vdb-tab-groups', JSON.stringify(d.tabGroups));
+    if (d.lastUrl)   localStorage.setItem('vdb-last-url',   d.lastUrl);
+    if (d.cfg && typeof d.cfg === 'object') {
+      const savedKey = cfg.key;           // never overwrite API key from server
+      Object.assign(cfg, d.cfg);
+      cfg.key = savedKey;
+      localStorage.setItem('vdb-cfg', JSON.stringify(cfg));
+    }
+    return true;
+  } catch { return false; }
+}
+
+function applyCfgUI() {
+  if (cfg.key)  { const el = document.getElementById('cfg-key');  if (el) el.value = cfg.key; }
+  if (cfg.home) { const el = document.getElementById('cfg-home'); if (el) el.value = cfg.home; }
+  const eng = document.getElementById('cfg-engine');
+  if (eng && cfg.engine) eng.value = cfg.engine;
+  const preset = document.getElementById('cfg-proxy-preset');
+  if (preset) preset.value = cfg.proxyPreset || 'off';
+  applyProxyPreset(cfg.proxyPreset || 'off', true);
+  const th = document.getElementById('tog-hist');    if (th) th.classList.toggle('on', cfg.hist);
+  const ta = document.getElementById('tog-autoext'); if (ta) ta.classList.toggle('on', cfg.autoext);
+}
