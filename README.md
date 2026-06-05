@@ -223,7 +223,8 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] User badge in topbar + login/logout buttons in Settings panel
 - [x] On first login: existing localStorage data seeded to server
 - [x] `cfg.key` (OpenAI API key) stays client-side only — never written to server
-- [ ] _(optional, Phase 5)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md`
+- [ ] _(Phase 5a)_ **OpenAI proxy** (`openai.php`) — store API key server-side per user; all AI calls routed through `openai.php` instead of direct `api.openai.com` fetch; key never exposed to client DOM or localStorage
+- [ ] _(Phase 5b)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md`
 
 ---
 
