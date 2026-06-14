@@ -1471,6 +1471,11 @@ function clearFindInFrame() {
 
 // Listen for find results posted from inside the iframe
 window.addEventListener('message', e => {
+  if (e.data?.type === 'vdb-open-tab') {
+    const url = e.data.url;
+    if (url && url.startsWith('http')) newTab(url);
+    return;
+  }
   if (e.data?.type === 'vdbFindResult') {
     const { count, current } = e.data;
     document.getElementById('find-count').textContent = count > 0 ? `${current}/${count}` : (count === 0 ? 'No results' : '');
