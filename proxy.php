@@ -104,6 +104,7 @@ $interceptScript = '<script>(function(){'
     . 'var _origOpen=window.open.bind(window);'
     . 'window.open=function(url,target,features){'
     .   'if(url&&typeof url==="string"&&url.indexOf("javascript:")<0){'
+    .     'try{url=new URL(url,document.baseURI).href;}catch(e){}'  // resolve relative URLs against <base href>
     .     'window.parent.postMessage({type:"vdb-open-tab",url:url},"*");'
     .     'return null;'
     .   '}'
