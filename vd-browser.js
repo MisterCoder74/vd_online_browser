@@ -8,8 +8,12 @@ let bookmarks = [];
 let history_  = [];   // renamed to avoid collision with window.history
 let notes = {};
 let passwords = [];
+let sessions = {};
 let currentUser = null;  // { id, username, email } — null = guest mode
 let _syncTimer  = null;
+// In-memory mirrors for data that can't rely on localStorage when logged in:
+let _tabGroupsData = null;   // { savedAt, groups[] } — kept in sync with server
+let _lastActiveUrl = '';     // current active URL — replaces localStorage for logged-in users
 
 // ── BOOT ──────────────────────────────────────
 async function boot() {
@@ -28,8 +32,8 @@ async function boot() {
     loadBM(); loadHist(); loadNotes(); loadSessions(); loadPwds();
   }
   newTab();
-  // Restore last active page (persists across navigation away and back)
-  const lastUrl = localStorage.getItem('vdb-last-url');
+  // Restore last active page — prefer in-memory (set by pullState for logged-in), fallback to localStorage for guest
+  const lastUrl = _lastActiveUrl || localStorage.getItem('vdb-last-url');
   if (lastUrl && lastUrl !== 'about:home') loadUrl(lastUrl);
   renderBM(); renderHist(); renderNotes(); renderSessions(); renderTabGroups(); renderPwdPanel();
   updateAiStatus(); updateProxyStatus();
@@ -188,8 +192,9 @@ function finishLoad(fr, url, title) {
   star.classList.toggle('on', isBm);
   document.getElementById('bm-url').value = url;
   document.getElementById('bm-title').value = title;
-  // Persist last active page so reloading the browser restores it
-  localStorage.setItem('vdb-last-url', url);
+  // Persist last active page — guest only; logged-in users rely on server state
+  _lastActiveUrl = url;
+  if (!currentUser) localStorage.setItem('vdb-last-url', url);
 }
 
 function showBlocked(url) {
@@ -252,7 +257,7 @@ function loadPwds() {
   try { passwords = JSON.parse(localStorage.getItem('vdb-passwords') || '[]'); } catch { passwords = []; }
 }
 function savePwds() {
-  localStorage.setItem('vdb-passwords', JSON.stringify(passwords));
+  if (!currentUser) localStorage.setItem('vdb-passwords', JSON.stringify(passwords));
   const el = document.getElementById('pwd-cnt');
   if (el) el.textContent = passwords.length;
   scheduleSync();
@@ -358,7 +363,7 @@ function fillDomainFromTab() {
 
 // ── BOOKMARKS ─────────────────────────────────
 function loadBM()  { bookmarks = JSON.parse(localStorage.getItem('vdb-bm') || '[]'); }
-function saveBM()  { localStorage.setItem('vdb-bm', JSON.stringify(bookmarks)); scheduleSync(); }
+function saveBM()  { if (!currentUser) localStorage.setItem('vdb-bm', JSON.stringify(bookmarks)); scheduleSync(); }
 
 function addBookmark() {
   const title = document.getElementById('bm-title').value.trim() || 'Untitled';
@@ -417,7 +422,7 @@ function quickBookmark() {
 
 // ── HISTORY ───────────────────────────────────
 function loadHist() { history_ = JSON.parse(localStorage.getItem('vdb-hist') || '[]'); }
-function saveHist() { localStorage.setItem('vdb-hist', JSON.stringify(history_.slice(0, 500))); scheduleSync(); }
+function saveHist() { if (!currentUser) localStorage.setItem('vdb-hist', JSON.stringify(history_.slice(0, 500))); scheduleSync(); }
 
 function addHist(url) {
   if (!cfg.hist) return;
@@ -449,7 +454,7 @@ function saveNote()  {
   const u = getTab()?.url; if (!u || u === 'about:home') return;
   const v = document.getElementById('notes-area').value;
   if (v) notes[u] = v; else delete notes[u];
-  localStorage.setItem('vdb-notes', JSON.stringify(notes));
+  if (!currentUser) localStorage.setItem('vdb-notes', JSON.stringify(notes));
   scheduleSync();
   renderNotes();
 }
@@ -1270,13 +1275,13 @@ function globalKey(e) {
 }
 
 // ── SESSIONS ──────────────────────────────────
-let sessions = {};
+// sessions declared at top of STATE block
 
 function loadSessions() {
   sessions = JSON.parse(localStorage.getItem('vdb-sessions') || '{}');
 }
 function _saveSessions() {
-  localStorage.setItem('vdb-sessions', JSON.stringify(sessions));
+  if (!currentUser) localStorage.setItem('vdb-sessions', JSON.stringify(sessions));
   scheduleSync();
 }
 
@@ -1374,7 +1379,9 @@ async function aiGroupTabs() {
         return t ? { title: t.title, url: t.url, fav: t.fav } : null;
       }).filter(Boolean)
     }));
-    localStorage.setItem('vdb-tab-groups', JSON.stringify({ savedAt: new Date().toISOString(), groups: snapshot }));
+    const tgPayload = { savedAt: new Date().toISOString(), groups: snapshot };
+    _tabGroupsData = tgPayload;
+    if (!currentUser) localStorage.setItem('vdb-tab-groups', JSON.stringify(tgPayload));
     scheduleSync();
     renderTabGroups();
 
@@ -1388,12 +1395,16 @@ async function aiGroupTabs() {
 }
 
 function renderTabGroups() {
-  const raw = localStorage.getItem('vdb-tab-groups');
+  // Use in-memory mirror (logged-in) or localStorage fallback (guest)
+  const raw = _tabGroupsData || (() => {
+    const s = localStorage.getItem('vdb-tab-groups');
+    return s ? (() => { try { return JSON.parse(s); } catch { return null; } })() : null;
+  })();
   const box  = document.getElementById('tab-groups-box');
   const list = document.getElementById('tg-list');
   const meta = document.getElementById('tg-meta');
   if (!raw) { box.style.display = 'none'; return; }
-  const { savedAt, groups } = JSON.parse(raw);
+  const { savedAt, groups } = raw;
   if (!groups || !groups.length) { box.style.display = 'none'; return; }
   box.style.display = '';
   const d = new Date(savedAt);
@@ -1410,7 +1421,9 @@ function renderTabGroups() {
 }
 
 function clearTabGroups() {
+  _tabGroupsData = null;
   localStorage.removeItem('vdb-tab-groups');
+  scheduleSync();
   renderTabGroups();
   toast('Tab groups cleared', 'ok');
 }
@@ -1969,12 +1982,17 @@ async function authLogout() {
  *  Called on login, register, and logout to prevent cross-account contamination. */
 function clearDataCache() {
   bookmarks = []; history_ = []; notes = {}; passwords = []; sessions = {};
-  ['vdb-bm','vdb-hist','vdb-notes','vdb-passwords','vdb-sessions',
-   'vdb-tab-groups','vdb-last-url'].forEach(k => localStorage.removeItem(k));
+  _tabGroupsData = null; _lastActiveUrl = '';
+  // Nuclear clear: remove every vdb-* key except cfg and guest flag
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('vdb-') && k !== 'vdb-cfg' && k !== 'vdb-guest')
+    .forEach(k => localStorage.removeItem(k));
 }
 
-/** Persist current in-memory state to localStorage (offline/guest cache). */
+/** Persist current in-memory state to localStorage (guest/offline cache only).
+ *  When logged in, the server is the single source of truth — do not write localStorage. */
 function persistToLocalStorage() {
+  if (currentUser) return;   // logged-in users: server only
   localStorage.setItem('vdb-bm',        JSON.stringify(bookmarks));
   localStorage.setItem('vdb-hist',      JSON.stringify(history_));
   localStorage.setItem('vdb-notes',     JSON.stringify(notes));
@@ -1990,16 +2008,14 @@ function scheduleSync() {
 
 async function pushState() {
   if (!currentUser) return;
-  const tgRaw     = localStorage.getItem('vdb-tab-groups');
-  const tabGroups = tgRaw ? (() => { try { return JSON.parse(tgRaw); } catch { return null; } })() : null;
   const state = {
     bookmarks,
     history:   history_,
     notes,
     passwords,
     sessions,
-    tabGroups,
-    lastUrl:   localStorage.getItem('vdb-last-url'),
+    tabGroups: _tabGroupsData,
+    lastUrl:   _lastActiveUrl || null,
     cfg: {
       engine: cfg.engine, home: cfg.home, hist: cfg.hist,
       autoext: cfg.autoext, proxyPreset: cfg.proxyPreset, proxy: cfg.proxy
@@ -2027,8 +2043,8 @@ async function pullState() {
     if (d.notes !== undefined)                         notes     = d.notes;
     if (Array.isArray(d.passwords))                    passwords = d.passwords;
     if (d.sessions && typeof d.sessions === 'object')  sessions  = d.sessions;
-    if (d.tabGroups) localStorage.setItem('vdb-tab-groups', JSON.stringify(d.tabGroups));
-    if (d.lastUrl)   localStorage.setItem('vdb-last-url',   d.lastUrl);
+    if (d.tabGroups) { _tabGroupsData = d.tabGroups; }
+    if (d.lastUrl)   { _lastActiveUrl  = d.lastUrl; }
     if (d.cfg && typeof d.cfg === 'object') {
       const savedKey = cfg.key;           // never overwrite API key from server
       Object.assign(cfg, d.cfg);
