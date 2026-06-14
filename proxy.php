@@ -91,5 +91,23 @@ if (preg_match('/<head[\s>]/i', $html)) {
     $html = $baseTag . $html;
 }
 
+// ── Inject _blank interceptor (opens links in VD Browser's own tabs) ──────
+$interceptScript = '<script>(function(){'
+    . 'document.addEventListener("click",function(e){'
+    .   'var a=e.target.closest("a[target=\'_blank\']");'
+    .   'if(a&&a.href&&a.href.indexOf("javascript:")<0){'
+    .     'e.preventDefault();e.stopPropagation();'
+    .     'window.parent.postMessage({type:"vdb-open-tab",url:a.href},"*");'
+    .   '}'
+    . '},true);'   // capture phase so we beat any inline onclick handlers
+    . '})();</script>';
+
+// Insert just before </body> if present, otherwise append
+if (preg_match('/<\/body>/i', $html)) {
+    $html = preg_replace('/<\/body>/i', $interceptScript . '</body>', $html, 1);
+} else {
+    $html .= $interceptScript;
+}
+
 // ── Send response ──────────────────────────────────────────────────────────
 echo $html;
