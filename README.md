@@ -48,6 +48,7 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 - **Custom proxy**: any proxy URL configurable in Settings
 - **Direct mode**: no proxy (most modern sites will block embedding)
 - Pages loaded via `fetch()` + `iframe.srcdoc` injection with auto-injected `<base href>` for relative URLs
+- **`target="_blank"` link interception**: script injected by `proxy.php` catches all `<a target="_blank">` clicks (capture phase) and all `window.open()` calls, resolves relative URLs against `document.baseURI`, and opens them as new internal VD Browser tabs instead of native browser windows
 
 ### 🪟 Side-by-Side Split Mode _(Fase 2)_
 - `Ctrl+\` or toolbar button to enter/exit split mode
@@ -223,8 +224,11 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] User badge in topbar + login/logout buttons in Settings panel
 - [x] On first login: existing localStorage data seeded to server
 - [x] `cfg.key` (OpenAI API key) stays client-side only — never written to server
-- [ ] _(Phase 5a)_ **OpenAI proxy** (`openai.php`) — store API key server-side per user; all AI calls routed through `openai.php` instead of direct `api.openai.com` fetch; key never exposed to client DOM or localStorage
+- [ ] _(Phase 5a)_ **OpenAI proxy** (`openai.php`) — store API key server-side per user; all AI calls routed through `openai.php` instead of direct `api.openai.com` fetch; key never exposed to client DOM or localStorage ← **⬅ next planned step**
 - [ ] _(Phase 5b)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md`
+
+### 🛠️ Ad-hoc Improvements (outside main phases)
+- [x] **`target="_blank"` link interception** (2026-06-14) — `proxy.php` injects a script that intercepts `<a target="_blank">` clicks and `window.open()` calls; relative URLs are resolved against `document.baseURI` before being forwarded to the parent as `postMessage`; `vd-browser.js` opens them as new internal tabs via `newTab(url)`. Works only when proxy mode is active.
 
 ---
 
