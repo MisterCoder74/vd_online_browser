@@ -100,6 +100,15 @@ $interceptScript = '<script>(function(){'
     .     'window.parent.postMessage({type:"vdb-open-tab",url:a.href},"*");'
     .   '}'
     . '},true);'   // capture phase so we beat any inline onclick handlers
+    // Also intercept window.open() calls (e.g. onclick="window.open('url','_blank')")
+    . 'var _origOpen=window.open.bind(window);'
+    . 'window.open=function(url,target,features){'
+    .   'if(url&&typeof url==="string"&&url.indexOf("javascript:")<0){'
+    .     'window.parent.postMessage({type:"vdb-open-tab",url:url},"*");'
+    .     'return null;'
+    .   '}'
+    .   'return _origOpen(url,target,features);'
+    . '};'
     . '})();</script>';
 
 // Insert just before </body> if present, otherwise append
