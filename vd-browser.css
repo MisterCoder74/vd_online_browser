@@ -229,6 +229,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-mono);height:
 .toast.err{background:var(--red-dim);border:1px solid var(--red);color:var(--red);}
 .toast.inf{background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);}
 @keyframes tIn{from{transform:translateX(14px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes tOut{from{transform:translateX(0);opacity:1}to{transform:translateX(14px);opacity:0}}
+.toast.out{animation:tOut .28s ease forwards;}
 
 /* scrollbars */
 *{scrollbar-width:thin;scrollbar-color:var(--border2) var(--bg2);}
