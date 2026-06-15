@@ -1809,7 +1809,7 @@ async function rebuildPage() {
     const rawHtml = rMode === 'allorigins-json' ? ((await res.json()).contents || '') : await res.text();
     if (!rawHtml) throw new Error('Empty page response');
 
-    const gptPrompt = `You are a website restyler. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML making sure you cover all the elements included in the <body> block. ABSOLUTELY no markdown fences, no explanations, no placeholders like "content would go here" or "to do".\n\nChanges: ${prompt}\n\nOriginal HTML (first 11000 chars):\n${rawHtml.slice(0, 11000)}`;
+    const gptPrompt = `You are a website restyler. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML making sure you cover all the elements included in the <body> block. ABSOLUTELY no markdown fences, no explanations, no placeholders like "content would go here" or "to do".\n\nChanges: ${prompt}\n\nOriginal HTML (first 22000 chars):\n${rawHtml.slice(0, 22000)}`;
     const rebuiltData = await openaiChat('gpt-4.1-nano', [{ role: 'user', content: gptPrompt }], 28000);
     if (!rebuiltData.choices?.length) throw new Error('AI returned empty content');
     let rebuilt = rebuiltData.choices?.[0]?.message?.content || '';
