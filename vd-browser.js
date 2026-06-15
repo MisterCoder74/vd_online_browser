@@ -1880,11 +1880,15 @@ function relTime(iso) {
 
 function toast(msg, type = 'ok') {
   const w = document.getElementById('toasts');
+  if (!w) return;
   const t = document.createElement('div');
   t.className = 'toast ' + type;
   t.innerHTML = (type==='ok'?'✓':type==='err'?'✕':'ℹ') + ' ' + msg;
   w.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(() => {
+    t.classList.add('out');
+    t.addEventListener('animationend', () => t.remove(), { once: true });
+  }, 2900);
 }
 
 // ── START ─────────────────────────────────────
