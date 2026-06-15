@@ -510,8 +510,7 @@ async function getPageText(url) {
 }
 
 async function ai(action) {
-  const key = cfg.key;
-  if (!key) { toast('Set your OpenAI API key in Settings','err'); switchPanel('settings'); return; }
+  if (!currentUser && !cfg.key) { toast('Set your OpenAI API key in Settings','err'); switchPanel('settings'); return; }
   const out = document.getElementById('ai-out');
   const url = getTab()?.url || '';
   const t   = getTab()?.title || '';
@@ -543,13 +542,7 @@ async function ai(action) {
   out.textContent = '⏳ Thinking…';
 
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 512 })
-    });
-    if (!r.ok) throw new Error('API error ' + r.status);
-    const data = await r.json();
+    const data = await openaiChat('gpt-4o-mini', [{ role: 'user', content: prompt }], 512);
     const ans = data.choices?.[0]?.message?.content || 'No response.';
     out.className = 'ai-out';
     out.innerHTML = ans.replace(/\n/g, '<br>');
@@ -612,8 +605,39 @@ function updateProxyStatus() {
 
 function updateAiStatus() {
   const el = document.getElementById('sb-ai');
-  if (cfg.key) { el.textContent = 'ready'; el.style.color = 'var(--accent)'; }
+  if (currentUser || cfg.key) { el.textContent = 'ready'; el.style.color = 'var(--accent)'; }
   else { el.textContent = 'no key'; el.style.color = 'var(--red)'; }
+}
+
+// ── OPENAI HELPER ─────────────────────────────────────────────────────────────
+// Logged-in users → server-side proxy (openai.php); key never leaves server.
+// Guest users → direct call with localStorage cfg.key.
+async function openaiChat(model, messages, maxTokens = 512, temperature = null) {
+  if (currentUser) {
+    const opts = { model, messages, max_tokens: maxTokens };
+    if (temperature !== null) opts.temperature = temperature;
+    const r = await fetch('openai.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts)
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'OpenAI proxy error ' + r.status);
+    return data;
+  } else {
+    const key = cfg.key;
+    if (!key) throw new Error('Set your OpenAI API key in Settings');
+    const opts = { model, messages, max_tokens: maxTokens };
+    if (temperature !== null) opts.temperature = temperature;
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify(opts)
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'API error ' + r.status);
+    return data;
+  }
 }
 
 function setReaderFont(v) { document.getElementById('reader-out').style.fontSize = v + 'px'; }
@@ -661,7 +685,7 @@ async function _handleFormData(fields) {
   }
   _ffFields = fields;
   list.innerHTML = '<div class="ff-empty">Asking AI for suggestions…</div>';
-  const key = cfg.key || '';
+  const key = currentUser ? true : (cfg.key || '');
   if (!key) {
     _renderFormFields(fields, fields.map(() => ''));
     toast('Add OpenAI API key in Settings for smart suggestions', 'err');
@@ -676,13 +700,7 @@ async function _handleFormData(fields) {
   const sysMsg = `You are an AI that suggests realistic form fill values. Given a page URL and its form fields, respond with a JSON array of objects {idx, value}. Only fill fields that make sense (skip passwords, CAPTCHAs, file uploads). Use realistic placeholder data. For select fields, choose from the provided options.`;
   const userMsg = `Page URL: ${url}\n\nForm fields:\n${fieldDesc}\n\nRespond ONLY with a JSON array, no explanation. Example: [{"idx":0,"value":"John Doe"},{"idx":1,"value":"john@example.com"}]`;
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: sysMsg }, { role: 'user', content: userMsg }], max_tokens: 400 })
-    });
-    const j = await res.json();
-    if (!res.ok) throw new Error(j.error?.message || res.statusText);
+    const j = await openaiChat('gpt-4o-mini', [{ role: 'system', content: sysMsg }, { role: 'user', content: userMsg }], 400);
     let raw = j.choices[0].message.content.trim();
     raw = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
     const suggestions = JSON.parse(raw);
@@ -1126,7 +1144,7 @@ function loadCfg() {
   if (cfg.proxyPreset === undefined) cfg.proxyPreset = 'local';
   if (cfg.proxy === undefined) cfg.proxy = null;
   // Reflect to UI
-  if (cfg.key)    { const el = document.getElementById('cfg-key');    if (el) el.value = cfg.key; }
+  if (!currentUser && cfg.key) { const el = document.getElementById('cfg-key'); if (el) el.value = cfg.key; }
   if (cfg.home)   { const el = document.getElementById('cfg-home');   if (el) el.value = cfg.home; }
   const eng = document.getElementById('cfg-engine');
   if (eng && cfg.engine) eng.value = cfg.engine;
@@ -1138,7 +1156,24 @@ function loadCfg() {
 }
 
 function saveSettings() {
-  cfg.key         = document.getElementById('cfg-key').value.trim();
+  const rawKey = document.getElementById('cfg-key').value.trim();
+  if (currentUser) {
+    // Logged in: save API key server-side, never in localStorage
+    if (rawKey) {
+      fetch('data.php?action=setkey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: rawKey })
+      }).then(() => {
+        document.getElementById('cfg-key').value = '';
+        document.getElementById('cfg-key').placeholder = 'Stored on server ●●●●●●●●';
+        updateAiStatus();
+        toast('API key saved on server', 'ok');
+      });
+    }
+  } else {
+    cfg.key = rawKey;
+  }
   cfg.home        = document.getElementById('cfg-home').value.trim() || 'about:home';
   cfg.engine      = document.getElementById('cfg-engine').value;
   cfg.proxyPreset = document.getElementById('cfg-proxy-preset').value;
@@ -1347,8 +1382,7 @@ function renderSessions() {
 
 // ── SMART TAB GROUPER ─────────────────────────
 async function aiGroupTabs() {
-  const key = cfg.key;
-  if (!key) { toast('Set your OpenAI API key in Settings', 'err'); switchPanel('settings'); return; }
+  if (!currentUser && !cfg.key) { toast('Set your OpenAI API key in Settings', 'err'); switchPanel('settings'); return; }
   if (tabs.length < 2) { toast('Open at least 2 tabs to group', 'err'); return; }
   switchPanel('ai');
   const out = document.getElementById('ai-out');
@@ -1357,13 +1391,8 @@ async function aiGroupTabs() {
   const tabList = tabs.map((t, i) => `${i+1}. ${t.title} — ${t.url}`).join('\n');
   const prompt = `You are a browser tab organizer. Group the following open tabs into 2–5 meaningful categories. Assign each tab to exactly one group.\n\nTabs:\n${tabList}\n\nReturn ONLY a JSON object, no markdown:\n{"groups":[{"name":"Group Name","emoji":"🔧","tabs":[1,3]},…]}`;
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 512 })
-    });
-    if (!r.ok) throw new Error('API error ' + r.status);
-    const data = await r.json();
+    const data = await openaiChat('gpt-4o-mini', [{ role: 'user', content: prompt }], 512);
+    if (!data.choices?.length) throw new Error('No choices returned');
     let raw = data.choices?.[0]?.message?.content || '{}';
     raw = raw.replace(/```json|```/g, '').trim();
     let parsed;
@@ -1762,8 +1791,7 @@ function editSave() {
 
 // ── PAGE REBUILDER ────────────────────────────
 async function rebuildPage() {
-  const key = cfg.key;
-  if (!key) { toast('Set OpenAI API key in Settings', 'err'); switchPanel('settings'); return; }
+  if (!currentUser && !cfg.key) { toast('Set OpenAI API key in Settings', 'err'); switchPanel('settings'); return; }
   const prompt = document.getElementById('rebuild-prompt').value.trim();
   if (!prompt) { toast('Describe the changes you want', 'err'); return; }
   const url = getTab()?.url;
@@ -1782,13 +1810,9 @@ async function rebuildPage() {
     if (!rawHtml) throw new Error('Empty page response');
 
     const gptPrompt = `You are a website restyler. Below is the source HTML of a web page. Apply the following changes and return the COMPLETE modified HTML making sure you cover all the elements included in the <body> block. ABSOLUTELY no markdown fences, no explanations, no placeholders like "content would go here" or "to do".\n\nChanges: ${prompt}\n\nOriginal HTML (first 11000 chars):\n${rawHtml.slice(0, 11000)}`;
-    const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: 'gpt-4.1-nano', messages: [{ role: 'user', content: gptPrompt }], max_tokens: 28000 })
-    });
-    if (!r2.ok) throw new Error('OpenAI error ' + r2.status);
-    let rebuilt = (await r2.json()).choices?.[0]?.message?.content || '';
+    const rebuiltData = await openaiChat('gpt-4.1-nano', [{ role: 'user', content: gptPrompt }], 28000);
+    if (!rebuiltData.choices?.length) throw new Error('AI returned empty content');
+    let rebuilt = rebuiltData.choices?.[0]?.message?.content || '';
     rebuilt = rebuilt.replace(/^```html?\n?/i, '').replace(/```\s*$/, '').trim();
     if (!rebuilt) throw new Error('AI returned empty content');
 
@@ -2062,7 +2086,19 @@ async function pullState() {
 }
 
 function applyCfgUI() {
-  if (cfg.key)  { const el = document.getElementById('cfg-key');  if (el) el.value = cfg.key; }
+  const keyEl = document.getElementById('cfg-key');
+  if (keyEl) {
+    if (currentUser) {
+      // Show server-side key status (never populate with actual key)
+      keyEl.value = '';
+      fetch('data.php?action=haskey')
+        .then(r => r.json())
+        .then(j => { keyEl.placeholder = j.hasKey ? 'Stored on server ●●●●●●●●' : 'Enter API key to save server-side'; })
+        .catch(() => { keyEl.placeholder = 'Enter API key to save server-side'; });
+    } else if (cfg.key) {
+      keyEl.value = cfg.key;
+    }
+  }
   if (cfg.home) { const el = document.getElementById('cfg-home'); if (el) el.value = cfg.home; }
   const eng = document.getElementById('cfg-engine');
   if (eng && cfg.engine) eng.value = cfg.engine;
