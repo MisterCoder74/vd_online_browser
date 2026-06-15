@@ -14,6 +14,7 @@ Built with a dark-themed design system (Fraunces + DM Mono, CSS custom propertie
 | `vd-browser.css` | All styles (linked with `?v=<?php echo time(); ?>` for cache busting) |
 | `vd-browser.js` | All JavaScript logic (linked with `?v=<?php echo time(); ?>` for cache busting) |
 | `proxy.php` | Server-side cURL proxy — fetches pages and returns HTML to the browser |
+| `openai.php` | Server-side OpenAI proxy — forwards AI requests using the API key stored per-user on the server; key never exposed to client |
 | `vd-ai-bookman.html` | Standalone AI-powered Bookmark Manager (linked from the browser sidebar) |
 | `book_man_api.php` | PHP backend API for the Bookmark Manager |
 | `bookmarks.json` | Persistent bookmark storage |
@@ -224,8 +225,8 @@ All AI actions fetch **real page content** via `proxy.php` before sending to GPT
 - [x] User badge in topbar + login/logout buttons in Settings panel
 - [x] On first login: existing localStorage data seeded to server
 - [x] `cfg.key` (OpenAI API key) stays client-side only — never written to server
-- [ ] _(Phase 5a)_ **OpenAI proxy** (`openai.php`) — store API key server-side per user; all AI calls routed through `openai.php` instead of direct `api.openai.com` fetch; key never exposed to client DOM or localStorage ← **⬅ next planned step**
-- [ ] _(Phase 5b)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md`
+- [x] _(Phase 5a)_ **OpenAI proxy** (`openai.php`) — API key stored server-side in `data/{userId}/apikey.json`; all AI calls routed through `openai.php` (cURL → OpenAI); key never returned to client. Guest users fall back to direct `api.openai.com` call with localStorage key. New `data.php` endpoints: `?action=setkey` (save/update key) + `?action=haskey` (check presence without exposing it). Settings UI updated: logged-in users see placeholder "Stored on server ●●●●●●●●" and key field saves server-side only.
+- [ ] _(Phase 5b)_ **External URL injection / chatbot bridge** — 3-layer architecture detailed in `injection_plan.md` ← **⬅ next planned step**
 
 ### 🛠️ Ad-hoc Improvements (outside main phases)
 - [x] **`target="_blank"` link interception** (2026-06-14) — `proxy.php` injects a script that intercepts `<a target="_blank">` clicks and `window.open()` calls; relative URLs are resolved against `document.baseURI` before being forwarded to the parent as `postMessage`; `vd-browser.js` opens them as new internal tabs via `newTab(url)`. Works only when proxy mode is active.
