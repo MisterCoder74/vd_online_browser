@@ -22,7 +22,33 @@ if (empty($_SESSION['user_id'])) {
 // Sanitize user ID for filesystem path
 $userId    = preg_replace('/[^a-z0-9_]/', '', $_SESSION['user_id']);
 $stateFile = __DIR__ . '/data/' . $userId . '/state.json';
+$keyFile   = __DIR__ . '/data/' . $userId . '/apikey.json';
 $method    = $_SERVER['REQUEST_METHOD'];
+$action    = $_GET['action'] ?? '';
+
+// ── API key endpoints ─────────────────────────────────────────────────────────
+
+// POST ?action=setkey  — save (or clear) the OpenAI API key server-side
+if ($action === 'setkey' && $method === 'POST') {
+    $body = json_decode(file_get_contents('php://input'), true);
+    $key  = trim($body['key'] ?? '');
+    $dir  = dirname($keyFile);
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    file_put_contents($keyFile, json_encode(['key' => $key]));
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+// GET ?action=haskey  — returns whether a key exists (never returns the key itself)
+if ($action === 'haskey' && $method === 'GET') {
+    $hasKey = false;
+    if (file_exists($keyFile)) {
+        $kd     = json_decode(file_get_contents($keyFile), true);
+        $hasKey = !empty(trim($kd['key'] ?? ''));
+    }
+    echo json_encode(['ok' => true, 'hasKey' => $hasKey]);
+    exit;
+}
 
 if ($method === 'GET') {
     if (!file_exists($stateFile)) {
